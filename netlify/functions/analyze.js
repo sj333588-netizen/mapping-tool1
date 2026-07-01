@@ -362,17 +362,14 @@ Respond ONLY with this JSON (no markdown, no extra text):
         parsed.inspector_note = `${topHazard.severity} priority — ${prettyName(topHazard.id)}${obj}. ${impact}`.trim();
       }
 
-      // ── YOLO CROSS-VERIFICATION (optional, non-blocking) ──
+      // ── YOLO CROSS-VERIFICATION (parallel, non-blocking) ──
       const yoloServiceUrl = process.env.YOLO_SERVICE_URL;
+      let yoloPromise = Promise.resolve(null);
       if (yoloServiceUrl && parsed.quantification) {
         try {
           const imgBuffer = Buffer.from(image, 'base64');
-          
-          // Netlify Functions run on Node.js where FormData/Blob may not be
-          // available globally — use multipart/form-data manually instead
           const boundary = '----YOLOBoundary' + Date.now();
           const CRLF = '\r\n';
-          
           const header = Buffer.from(
             `--${boundary}${CRLF}` +
             `Content-Disposition: form-data; name="file"; filename="photo.jpg"${CRLF}` +
@@ -382,9 +379,9 @@ Respond ONLY with this JSON (no markdown, no extra text):
           const multipartBody = Buffer.concat([header, imgBuffer, footer]);
 
           const yoloController = new AbortController();
-          const yoloTimeout = setTimeout(() => yoloController.abort(), 10000);
+          const yoloTimeout = setTimeout(() => yoloController.abort(), 4000);
 
-          const yoloResp = await fetch(`${yoloServiceUrl}/detect`, {
+          yoloPromise = fetch(`${yoloServiceUrl}/detect`, {
             method: 'POST',
             headers: {
               'Content-Type': `multipart/form-data; boundary=${boundary}`,
@@ -392,25 +389,25 @@ Respond ONLY with this JSON (no markdown, no extra text):
             },
             body: multipartBody,
             signal: yoloController.signal
-          });
-          clearTimeout(yoloTimeout);
+          }).then(async r => {
+            clearTimeout(yoloTimeout);
+            if (r.ok) return r.json();
+            return null;
+          }).catch(() => null);
+        } catch(e) { /* silent */ }
+      }
 
-          if (yoloResp.ok) {
-            const yoloData = await yoloResp.json();
-            const groqPed = parsed.quantification.pedestrian_count || 0;
-            const groqVeh = parsed.quantification.vehicle_count || 0;
-
-            parsed.quantification.pedestrian_count_yolo = yoloData.pedestrian_count_yolo;
-            parsed.quantification.vehicle_count_yolo = yoloData.vehicle_count_yolo;
-            parsed.quantification.count_verification =
-              (Math.abs(groqPed - yoloData.pedestrian_count_yolo) <= 2 &&
-               Math.abs(groqVeh - yoloData.vehicle_count_yolo) <= 2)
-                ? 'verified' : 'discrepancy';
-            parsed.quantification.verification_source = 'YOLOv8n (open-source, self-hosted)';
-          }
-        } catch (yoloErr) {
-          // Silent fail — YOLO is a bonus layer, core audit must still succeed
-        }
+      const yoloData = await yoloPromise;
+      if (yoloData && parsed.quantification) {
+        const groqPed = parsed.quantification.pedestrian_count || 0;
+        const groqVeh = parsed.quantification.vehicle_count || 0;
+        parsed.quantification.pedestrian_count_yolo = yoloData.pedestrian_count_yolo;
+        parsed.quantification.vehicle_count_yolo = yoloData.vehicle_count_yolo;
+        parsed.quantification.count_verification =
+          (Math.abs(groqPed - yoloData.pedestrian_count_yolo) <= 2 &&
+           Math.abs(groqVeh - yoloData.vehicle_count_yolo) <= 2)
+            ? 'verified' : 'discrepancy';
+        parsed.quantification.verification_source = 'YOLOv8n (open-source, self-hosted)';
       }
 
       return {
