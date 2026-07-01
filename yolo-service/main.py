@@ -1,20 +1,14 @@
 """
 Kumbh Mapper — YOLOv8 Pedestrian/Vehicle Verification Service
 ----------------------------------------------------------------
-Purpose: Independently cross-verify the pedestrian_count and
-vehicle_count that the Groq vision-LLM (Llama 4 Scout) returns,
-using a separate, open-source, pre-trained object detection model
-(YOLOv8n by Ultralytics).
-
-This does NOT replace the Groq-based analysis. It runs alongside
-it, as a second opinion, so the final JSON can flag agreement or
-disagreement between the two independent sources.
-
-Model: yolov8n.pt (the "nano" variant — smallest/fastest YOLOv8
-model, ~6MB, pre-trained on the COCO dataset which already includes
-"person", "car", "motorcycle", "bus", "truck" as classes — no
-training needed, used as-is).
+Runs YOLOv8n (open-source, COCO pre-trained) to independently
+cross-verify pedestrian/vehicle counts from the Groq vision model.
 """
+
+import os
+# Force headless OpenCV before ultralytics imports it
+os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "0"
+import cv2  # noqa: F401 — must import before ultralytics to ensure headless
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,30 +18,23 @@ import io
 
 app = FastAPI(title="Kumbh Mapper YOLO Verification Service")
 
-# Allow requests from the Netlify-hosted frontend/function
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten this to your Netlify domain once deployed
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Load the pre-trained model once at startup (not per-request — faster)
+# Load model once at startup — not per request
 model = YOLO("yolov8n.pt")
 
-# COCO class names we care about for this project
 PERSON_CLASS = "person"
 VEHICLE_CLASSES = {"car", "motorcycle", "bus", "truck", "bicycle"}
-
-# Minimum confidence to count a detection (reduces false positives
-# from blurry/distant objects in field photos)
 CONFIDENCE_THRESHOLD = 0.35
 
 
 @app.get("/")
 def health_check():
-    """Simple endpoint to confirm the service is alive (used by Render's
-    health checks and for quick manual testing in a browser)."""
     return {
         "status": "ok",
         "service": "Kumbh Mapper YOLO Verification",
@@ -57,14 +44,6 @@ def health_check():
 
 @app.post("/detect")
 async def detect(file: UploadFile = File(...)):
-    """
-    Accepts a single photo, runs YOLOv8n on it, and returns counts of
-    detected people and vehicles, plus their types.
-
-    This is intentionally a SEPARATE, INDEPENDENT count from whatever
-    the Groq vision model reports for the same photo — the frontend
-    is responsible for merging/comparing the two.
-    """
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
 
@@ -79,7 +58,7 @@ async def detect(file: UploadFile = File(...)):
     pedestrian_count = 0
     vehicle_count = 0
     vehicle_types = []
-    detections = []  # raw per-object detail, useful for debugging/UI overlay later
+    detections = []
 
     for box in results.boxes:
         class_id = int(box.cls[0])
@@ -100,8 +79,6 @@ async def detect(file: UploadFile = File(...)):
         detections.append({
             "class": class_name,
             "confidence": round(confidence, 2),
-            # percentage-based bbox, same convention as the existing
-            # Groq bbox format used elsewhere in this project
             "bbox_x_pct": round(((x1 + x2) / 2) / img_w * 100, 1),
             "bbox_y_pct": round(((y1 + y2) / 2) / img_h * 100, 1),
             "bbox_w_pct": round((x2 - x1) / img_w * 100, 1),
