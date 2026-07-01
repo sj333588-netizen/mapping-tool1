@@ -78,6 +78,18 @@ IMPORTANT FOR QUANTIFICATION:
 - footpath_width_meters: number only (e.g. 1.5)
 - All example values in JSON below are placeholders — replace with actual observed values
 
+FIXED OBSTACLES (permanent structures that reduce usable walking area):
+- Identify any PERMANENT fixed structures standing on the walkable surface itself: statue, pillar, pole, tree trunk, bollard, kiosk, permanent bench, electrical box, well/structure base, monument.
+- Do NOT count: parked vehicles (temporary), people, movable carts — only permanent fixed structures.
+- For each one found, estimate its footprint area in sqm (small pole ~0.3, tree trunk ~1, statue/pillar ~5-20 depending on size, kiosk ~10-15).
+- fixed_obstacles: array of {type, area_sqm} — empty array [] if none visible.
+
+PREDICTED RISK (separate from currently-visible hazards — this is about what COULD happen once Kumbh-specific conditions apply, even if nothing is wrong right now):
+- Consider: this road/path will see (a) temporary barricades/crowd-control fencing installed, (b) significantly higher pedestrian volume than today, (c) possible rain/wet conditions.
+- Based on the CURRENT structural characteristics only (road width, presence of fixed obstacles, footpath width, intersection type, zone type) — NOT based on current crowd/weather — judge whether this location is structurally prone to becoming a bottleneck/hazard under those future conditions.
+- predicted_risks: array of objects, each: {condition: short label e.g. "barricade narrowing" / "crowd surge" / "rain waterlogging", likelihood: "low"|"medium"|"high", reasoning: one sentence explaining the structural reason}.
+- Only include a predicted risk if there is a genuine structural reason (e.g. road already narrow + fixed obstacle present = barricade narrowing likely). Empty array [] if the location has no structural concerns for future conditions.
+
 ADDITIONAL HARD RULES:
 - CONSTRUCTION SITE: If you see any of the following — excavated/dug-up road, construction debris, sand/gravel piles, yellow construction barriers, metal barricades, road under repair — then: narrow_path=HIGH, broken_barrier=MEDIUM (minimum), walkability="partial" or "no". Do NOT rate construction sites as LOW/CLEAR.
 - POTHOLE: Any visible crack, depression, broken asphalt/concrete = pothole severity MEDIUM minimum. pothole is a real hazard — treat same weight as slippery/waterlogged.
@@ -121,6 +133,8 @@ Respond ONLY with this JSON (no markdown, no extra text):
     "occlusions": "list any objects blocking camera view, e.g. parked vehicle, tree, crowd",
     "walkability": "yes|no|partial",
     "walkability_reason": "one sentence why it is or isn't ideal for walking",
+    "fixed_obstacles": [],
+    "predicted_risks": [],
     "yes_no_summary": {
       "waterlogging": "yes|no",
       "bottleneck": "yes|no",
@@ -349,25 +363,34 @@ Respond ONLY with this JSON (no markdown, no extra text):
       }
 
       // ── YOLO CROSS-VERIFICATION (optional, non-blocking) ──
-      // Independently re-counts pedestrians/vehicles using a separate
-      // open-source model (YOLOv8n), as a second opinion alongside the
-      // Groq vision-LLM estimate. This does NOT replace parsed.quantification
-      // values — it only ADDS extra fields for comparison. If the YOLO
-      // service is unreachable or slow, we skip it silently so the main
-      // audit is never blocked by it.
       const yoloServiceUrl = process.env.YOLO_SERVICE_URL;
       if (yoloServiceUrl && parsed.quantification) {
         try {
           const imgBuffer = Buffer.from(image, 'base64');
-          const formData = new FormData();
-          formData.append('file', new Blob([imgBuffer], { type: 'image/jpeg' }), 'photo.jpg');
+          
+          // Netlify Functions run on Node.js where FormData/Blob may not be
+          // available globally — use multipart/form-data manually instead
+          const boundary = '----YOLOBoundary' + Date.now();
+          const CRLF = '\r\n';
+          
+          const header = Buffer.from(
+            `--${boundary}${CRLF}` +
+            `Content-Disposition: form-data; name="file"; filename="photo.jpg"${CRLF}` +
+            `Content-Type: image/jpeg${CRLF}${CRLF}`
+          );
+          const footer = Buffer.from(`${CRLF}--${boundary}--${CRLF}`);
+          const multipartBody = Buffer.concat([header, imgBuffer, footer]);
 
           const yoloController = new AbortController();
-          const yoloTimeout = setTimeout(() => yoloController.abort(), 8000); // don't let YOLO hang the whole audit
+          const yoloTimeout = setTimeout(() => yoloController.abort(), 10000);
 
           const yoloResp = await fetch(`${yoloServiceUrl}/detect`, {
             method: 'POST',
-            body: formData,
+            headers: {
+              'Content-Type': `multipart/form-data; boundary=${boundary}`,
+              'Content-Length': multipartBody.length.toString()
+            },
+            body: multipartBody,
             signal: yoloController.signal
           });
           clearTimeout(yoloTimeout);
@@ -386,8 +409,7 @@ Respond ONLY with this JSON (no markdown, no extra text):
             parsed.quantification.verification_source = 'YOLOv8n (open-source, self-hosted)';
           }
         } catch (yoloErr) {
-          // Silent fail — YOLO verification is a bonus, not a requirement.
-          // The core Groq-based audit must still succeed even if this fails.
+          // Silent fail — YOLO is a bonus layer, core audit must still succeed
         }
       }
 
