@@ -1,14 +1,6 @@
 """
 Kumbh Mapper — YOLOv8 Pedestrian/Vehicle Verification Service
-----------------------------------------------------------------
-Runs YOLOv8n (open-source, COCO pre-trained) to independently
-cross-verify pedestrian/vehicle counts from the Groq vision model.
 """
-
-import os
-# Force headless OpenCV before ultralytics imports it
-os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "0"
-import cv2  # noqa: F401 — must import before ultralytics to ensure headless
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,7 +17,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Load model once at startup — not per request
 model = YOLO("yolov8n.pt")
 
 PERSON_CLASS = "person"
