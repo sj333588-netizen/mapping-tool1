@@ -1,0 +1,1796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Kumbh Path Analyzer — Field Safety Audit</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root{
+      --bg:#111318;--panel:#1a1d24;--panel2:#20242e;
+      --border:#2a2f3d;--border2:#333849;
+      --cyan:#00d4ff;--cyan-dim:rgba(0,212,255,0.1);
+      --purple:#8b5cf6;--green:#10b981;--red:#ef4444;
+      --amber:#f59e0b;--crimson:#dc2626;
+      --text:#f1f5f9;--text2:#94a3b8;--text3:#4b5563;
+    }
+    body.light{
+      --bg:#f0f2f7;--panel:#ffffff;--panel2:#f4f6fa;
+      --border:#e2e6ed;--border2:#ced4e0;
+      --cyan:#0077cc;--cyan-dim:rgba(0,119,204,0.08);
+      --purple:#6d41c9;--green:#059669;--red:#dc2626;
+      --amber:#d97706;--crimson:#b91c1c;
+      --text:#0f172a;--text2:#475569;--text3:#94a3b8;
+    }
+    body.light .brand-dot{box-shadow:none;}
+    .tog-wrap{display:flex;align-items:center;gap:6px;}
+    .tog-lbl{font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--text3);white-space:nowrap;}
+    .tog{position:relative;width:34px;height:19px;cursor:pointer;flex-shrink:0;}
+    .tog input{opacity:0;width:0;height:0;position:absolute;}
+    .tog-bar{position:absolute;inset:0;background:var(--border2);border-radius:10px;transition:background 0.2s;}
+    .tog-bar::before{content:'';position:absolute;width:13px;height:13px;left:3px;top:3px;background:var(--text3);border-radius:50%;transition:all 0.2s;}
+    .tog input:checked ~ .tog-bar{background:var(--cyan);}
+    .tog input:checked ~ .tog-bar::before{transform:translateX(15px);background:#fff;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;transition:background 0.2s,color 0.2s;}
+    header{height:48px;padding:0 16px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;z-index:500;}
+    .brand{display:flex;align-items:center;gap:8px;}
+    .brand-dot{width:8px;height:8px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan);}
+    .brand-name{font-size:0.82rem;font-weight:600;letter-spacing:0.04em;}
+    .status-chip{display:flex;align-items:center;gap:5px;background:var(--panel2);border:1px solid var(--border2);border-radius:6px;padding:4px 10px;font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--text2);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .nav-btn{font-size:0.72rem;font-weight:500;color:var(--text2);background:var(--panel2);border:1px solid var(--border2);padding:5px 12px;border-radius:6px;text-decoration:none;transition:all 0.15s;}
+    .nav-btn:hover{color:var(--cyan);border-color:rgba(0,212,255,0.4);background:var(--cyan-dim);}
+    .main{display:flex;flex:1;overflow:hidden;min-height:0;}
+    .panel{width:260px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;overflow-x:hidden;}
+    .panel::-webkit-scrollbar{width:2px;}
+    .panel::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+    #map{flex:1;z-index:0;min-height:0;min-width:0;position:relative;cursor:pointer;}
+    #map.hidden-view{display:none!important;}
+    .block{padding:10px 13px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .lbl{font-family:'JetBrains Mono',monospace;font-size:0.57rem;color:var(--text3);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:7px;}
+    .summary{display:none;background:var(--panel2);border:1px solid var(--border2);border-radius:8px;padding:11px;margin-bottom:2px;}
+    .summary.show{display:block;}
+    .sum-title{font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--cyan);letter-spacing:0.1em;margin-bottom:8px;}
+    .sum-kpis{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px;}
+    .sum-kpi{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 8px;text-align:center;}
+    .sum-kpi .sv{font-family:'JetBrains Mono',monospace;font-size:1.1rem;font-weight:700;}
+    .sum-kpi .sl{font-size:0.52rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-top:1px;}
+    .sum-top-risk{font-size:0.65rem;color:var(--text3);margin-top:6px;}
+    .sum-top-risk span{color:var(--red);font-weight:600;}
+    .dz{border:1.5px dashed var(--border2);border-radius:7px;padding:12px;text-align:center;cursor:pointer;transition:all 0.15s;position:relative;margin-bottom:6px;}
+    .dz:hover,.dz.over{border-color:var(--cyan);background:var(--cyan-dim);}
+    .dz input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+    .dz-icon{font-size:1.2rem;margin-bottom:3px;}
+    .dz-text{font-size:0.65rem;color:var(--text3);line-height:1.5;}
+    .dz-text strong{color:var(--cyan);display:block;font-size:0.68rem;margin-bottom:1px;}
+    .btn{width:100%;padding:8px;border:none;border-radius:6px;font-family:'Inter',sans-serif;font-weight:600;font-size:0.73rem;cursor:pointer;transition:all 0.15s;letter-spacing:0.02em;}
+    .btn+.btn{margin-top:4px;}
+    .btn-primary{background:var(--cyan);color:#111318;}
+    .btn-primary:hover{background:#33ddff;box-shadow:0 0 14px rgba(0,212,255,0.3);}
+    .btn-primary:disabled{opacity:0.35;cursor:not-allowed;box-shadow:none;}
+    .btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border2);}
+    .btn-ghost:hover{color:var(--cyan);border-color:rgba(0,212,255,0.3);}
+    .btn-ghost:disabled{opacity:0.3;cursor:not-allowed;}
+    .btn-playback{background:rgba(139,92,246,0.15);color:var(--purple);border:1px solid rgba(139,92,246,0.35);}
+    .btn-playback:hover:not(:disabled){background:rgba(139,92,246,0.28);border-color:var(--purple);}
+    .btn-playback:disabled{opacity:0.3;cursor:not-allowed;}
+    .btn-danger{background:transparent;color:var(--red);border:1px solid rgba(239,68,68,0.3);}
+    .btn-danger:disabled{opacity:0.3;cursor:not-allowed;}
+    .prog-wrap{display:none;margin-top:8px;}
+    .prog-wrap.show{display:block;}
+    .prog-track{background:var(--border);border-radius:3px;height:4px;overflow:hidden;margin-bottom:5px;}
+    .prog-fill{height:100%;background:linear-gradient(90deg,var(--cyan),var(--purple));border-radius:3px;width:0%;transition:width 0.4s;}
+    .prog-text{font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--text3);text-align:center;}
+    .export-row{display:flex;gap:4px;margin-top:4px;}
+    .btn-export{flex:1;padding:7px 4px;border:none;border-radius:6px;font-family:'Inter',sans-serif;font-weight:600;font-size:0.67rem;cursor:pointer;transition:all 0.15s;}
+    .btn-export:disabled{opacity:0.3;cursor:not-allowed;}
+    .btn-pdf{background:rgba(239,68,68,0.12);color:var(--red);border:1px solid rgba(239,68,68,0.3);}
+    .btn-pdf:hover:not(:disabled){background:rgba(239,68,68,0.22);border-color:var(--red);}
+    .btn-csv{background:rgba(16,185,129,0.12);color:var(--green);border:1px solid rgba(16,185,129,0.3);}
+    .btn-csv:hover:not(:disabled){background:rgba(16,185,129,0.22);border-color:var(--green);}
+    .kpi-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;}
+    .kpi{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 5px;text-align:center;}
+    .kpi .kv{font-family:'JetBrains Mono',monospace;font-size:1rem;font-weight:700;color:var(--cyan);}
+    .kpi .kl{font-size:0.5rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-top:1px;}
+    .legend{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;}
+    .leg-item{display:flex;align-items:center;gap:3px;font-size:0.58rem;color:var(--text3);}
+    .leg-dot{width:6px;height:6px;border-radius:50%;}
+    .feed{flex:1;overflow-y:auto;padding:6px;min-height:80px;}
+    .feed::-webkit-scrollbar{width:2px;}
+    .feed::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+    .feed-item{display:flex;gap:7px;align-items:center;padding:7px 8px;border-radius:7px;cursor:pointer;border:1px solid transparent;transition:all 0.12s;margin-bottom:3px;}
+    .feed-item:hover,.feed-item.on{background:var(--panel2);border-color:var(--border2);}
+    .feed-item img{width:40px;height:30px;object-fit:cover;border-radius:4px;flex-shrink:0;}
+    .feed-item .fi{flex:1;min-width:0;}
+    .feed-item .fn{font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--cyan);font-weight:600;display:flex;align-items:center;gap:5px;}
+    .feed-item .fc{font-family:'JetBrains Mono',monospace;font-size:0.54rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;}
+    .risk-badge{font-family:'JetBrains Mono',monospace;font-size:0.52rem;font-weight:700;padding:1px 5px;border-radius:4px;}
+    .s-dot{width:6px;height:6px;border-radius:50%;display:inline-block;flex-shrink:0;}
+    .s-pending{background:var(--text3);}
+    .s-processing{background:var(--cyan);animation:blink 1s infinite;}
+    .s-done{background:var(--green);}
+    .s-error{background:var(--red);}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+    .feed-empty{text-align:center;padding:20px 10px;color:var(--text3);font-size:0.68rem;line-height:2;}
+    .feed-empty .ei{font-size:1.4rem;margin-bottom:5px;opacity:0.3;}
+
+    /* ── TIMELINE PLAYBACK OVERLAY ── */
+    .pb-ovl{
+      display:none;position:absolute;inset:0;z-index:1000;
+      background:rgba(0,0,0,0.7);backdrop-filter:blur(2px);
+      flex-direction:column;align-items:center;justify-content:flex-end;
+      padding-bottom:20px;
+    }
+    .pb-ovl.show{display:flex;}
+
+    /* PLAYBACK CARD — floats above map */
+    .pb-card{
+      background:var(--panel);border:1px solid var(--border2);
+      border-radius:14px;padding:14px 16px;
+      width:calc(100% - 40px);max-width:560px;
+      box-shadow:0 8px 40px rgba(0,0,0,0.6);
+    }
+    .pb-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+    .pb-title{font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:var(--cyan);letter-spacing:0.08em;}
+    .pb-close{background:transparent;border:1px solid var(--border2);color:var(--text3);padding:3px 9px;border-radius:5px;cursor:pointer;font-size:0.65rem;transition:all 0.15s;}
+    .pb-close:hover{border-color:var(--red);color:var(--red);}
+
+    /* LIVE EVIDENCE STRIP */
+    .pb-evidence{
+      background:var(--panel2);border:1px solid var(--border);
+      border-radius:8px;padding:10px 12px;margin-bottom:10px;
+      min-height:54px;display:flex;gap:10px;align-items:flex-start;
+    }
+    .pb-ev-img{width:60px;height:45px;object-fit:cover;border-radius:5px;flex-shrink:0;border:1px solid var(--border2);}
+    .pb-ev-info{flex:1;min-width:0;}
+    .pb-ev-loc{font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--cyan);font-weight:700;margin-bottom:3px;}
+    .pb-ev-risk{font-family:'JetBrains Mono',monospace;font-size:0.58rem;font-weight:700;padding:2px 7px;border-radius:4px;display:inline-block;margin-bottom:4px;}
+    .pb-ev-hazards{font-size:0.62rem;color:var(--text2);line-height:1.5;}
+    .pb-ev-note{font-size:0.6rem;color:var(--text3);margin-top:3px;font-style:italic;}
+
+    /* LIVE COUNTERS */
+    .pb-counters{display:flex;gap:6px;margin-bottom:10px;}
+    .pb-cnt{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 6px;text-align:center;}
+    .pb-cnt .pv{font-family:'JetBrains Mono',monospace;font-size:0.95rem;font-weight:700;}
+    .pb-cnt .pl{font-size:0.48rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-top:1px;}
+
+    /* SCRUBBER */
+    .pb-scrub-wrap{margin-bottom:8px;}
+    .pb-scrub-track{position:relative;height:6px;background:var(--border);border-radius:3px;cursor:pointer;margin-bottom:4px;}
+    .pb-scrub-fill{height:100%;background:linear-gradient(90deg,var(--cyan),var(--purple));border-radius:3px;width:0%;transition:width 0.3s;}
+    .pb-scrub-thumb{position:absolute;top:50%;transform:translate(-50%,-50%);width:14px;height:14px;border-radius:50%;background:var(--cyan);border:2px solid var(--panel);box-shadow:0 0 8px var(--cyan);left:0%;transition:left 0.3s;cursor:grab;}
+    .pb-scrub-labels{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:0.52rem;color:var(--text3);}
+
+    /* CONTROLS */
+    .pb-controls{display:flex;align-items:center;gap:8px;}
+    .pb-btn{background:var(--panel2);border:1px solid var(--border2);color:var(--text2);border-radius:7px;padding:6px 12px;font-size:0.72rem;cursor:pointer;transition:all 0.15s;font-family:'JetBrains Mono',monospace;}
+    .pb-btn:hover{color:var(--cyan);border-color:var(--cyan);}
+    .pb-btn.active{background:var(--cyan);color:#111318;border-color:var(--cyan);}
+    .pb-speed{font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--text3);margin-left:auto;display:flex;align-items:center;gap:6px;}
+    .pb-speed-btn{background:var(--panel2);border:1px solid var(--border2);color:var(--text2);border-radius:4px;padding:3px 7px;font-size:0.6rem;cursor:pointer;transition:all 0.15s;}
+    .pb-speed-btn.on{background:var(--purple);color:#fff;border-color:var(--purple);}
+
+    /* POPUP */
+    .pop-ovl{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:16px;}
+    .pop-ovl.show{display:flex;}
+    .pop-box{background:var(--panel);border:1px solid var(--border2);border-radius:12px;width:100%;max-width:580px;max-height:88vh;overflow-y:auto;overflow-x:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.7);flex-shrink:0;}
+    .pop-box::-webkit-scrollbar{width:3px;}
+    .pop-box::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+
+    /* EVIDENCE SUMMARY CARD — in popup */
+    .ev-summary{margin:12px 16px 0;background:var(--panel2);border:1px solid var(--border2);border-radius:8px;overflow:hidden;}
+    .ev-summary-head{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--border);}
+    .ev-summary-title{font-family:'JetBrains Mono',monospace;font-size:0.58rem;color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;}
+    .ev-summary-risk{font-family:'JetBrains Mono',monospace;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:4px;}
+    .ev-summary-body{padding:8px 12px;}
+    .ev-hazard-tags{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;}
+    .ev-tag{font-family:'JetBrains Mono',monospace;font-size:0.55rem;font-weight:600;padding:2px 7px;border-radius:4px;display:flex;align-items:center;gap:3px;}
+    .ev-verdict{font-size:0.72rem;font-weight:700;padding:7px 10px;border-radius:6px;margin-top:4px;text-align:center;letter-spacing:0.02em;}
+
+    /* QUANTIFICATION CARD */
+    .quant-card{margin:10px 16px 0;background:var(--panel2);border:1px solid var(--border2);border-radius:8px;overflow:hidden;}
+    .quant-head{display:flex;align-items:center;justify-content:space-between;padding:7px 12px;border-bottom:1px solid var(--border);}
+    .quant-title{font-family:'JetBrains Mono',monospace;font-size:0.57rem;color:var(--text3);letter-spacing:0.1em;text-transform:uppercase;}
+    .quant-zone{font-family:'JetBrains Mono',monospace;font-size:0.6rem;font-weight:700;color:var(--cyan);padding:2px 8px;background:var(--cyan-dim);border:1px solid rgba(0,212,255,0.2);border-radius:4px;}
+    .quant-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--border);}
+    .quant-cell{background:var(--panel2);padding:7px 10px;}
+    .quant-cell .qk{font-family:'JetBrains Mono',monospace;font-size:0.5rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;}
+    .quant-cell .qv{font-family:'JetBrains Mono',monospace;font-size:0.72rem;font-weight:700;color:var(--text);}
+    .quant-boards{padding:7px 12px;border-top:1px solid var(--border);}
+    .quant-boards .qk{font-family:'JetBrains Mono',monospace;font-size:0.5rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;}
+    .board-tag{font-family:'JetBrains Mono',monospace;font-size:0.58rem;background:rgba(139,92,246,0.12);color:var(--purple);border:1px solid rgba(139,92,246,0.25);padding:2px 7px;border-radius:4px;display:inline-block;margin:2px 3px 2px 0;}
+    .quant-vehicles{padding:7px 12px;border-top:1px solid var(--border);}
+    .vehicle-tag{font-family:'JetBrains Mono',monospace;font-size:0.58rem;background:rgba(245,158,11,0.1);color:var(--amber);border:1px solid rgba(245,158,11,0.25);padding:2px 7px;border-radius:4px;display:inline-block;margin:2px 3px 2px 0;}
+    /* PHOTO CONTAINER */
+    .pop-photo{position:relative;overflow:hidden;line-height:0;}
+    .pop-photo img{width:100%;max-height:220px;object-fit:cover;display:block;}
+    .pop-risk-chip{position:absolute;top:10px;right:10px;font-family:'JetBrains Mono',monospace;font-size:0.72rem;font-weight:700;padding:5px 12px;border-radius:6px;backdrop-filter:blur(8px);z-index:3;}
+
+    /* CSS ANNOTATION BOX — % based, always inside photo */
+    .ann-box{
+      position:absolute;
+      pointer-events:none;
+      z-index:2;
+      box-sizing:border-box;
+    }
+    .ann-box .ann-inner{
+      position:relative;
+      width:100%;
+      height:100%;
+    }
+    /* Corner brackets via pseudo or borders */
+    .ann-box .ann-tl,.ann-box .ann-tr,.ann-box .ann-bl,.ann-box .ann-br{
+      position:absolute;
+      width:14px;height:14px;
+    }
+    .ann-box .ann-tl{top:0;left:0;border-top:2.5px solid;border-left:2.5px solid;border-radius:2px 0 0 0;}
+    .ann-box .ann-tr{top:0;right:0;border-top:2.5px solid;border-right:2.5px solid;border-radius:0 2px 0 0;}
+    .ann-box .ann-bl{bottom:0;left:0;border-bottom:2.5px solid;border-left:2.5px solid;border-radius:0 0 0 2px;}
+    .ann-box .ann-br{bottom:0;right:0;border-bottom:2.5px solid;border-right:2.5px solid;border-radius:0 0 2px 0;}
+    .ann-box .ann-fill{position:absolute;inset:0;}
+    .ann-box .ann-label{
+      position:absolute;
+      top:-22px;left:0;
+      font-family:'JetBrains Mono',monospace;
+      font-size:0.58rem;font-weight:700;
+      padding:2px 7px;border-radius:3px;
+      color:#fff;white-space:nowrap;
+      z-index:3;
+    }
+    /* if no space above, show inside */
+    .ann-box.label-inside .ann-label{top:4px;left:4px;}
+
+    .pop-meta{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:12px;}
+    .pop-meta-item{font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--text3);}
+    .pop-meta-item span{color:var(--cyan);}
+    .scene-box{margin:12px 16px;background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.12);border-radius:7px;padding:10px 12px;}
+    .scene-lbl{font-family:'JetBrains Mono',monospace;font-size:0.55rem;color:var(--text3);letter-spacing:0.1em;margin-bottom:4px;}
+    .scene-text{font-size:0.75rem;color:var(--text2);line-height:1.6;}
+    .findings-wrap{padding:0 16px 8px;}
+    .findings-header{font-family:'JetBrains Mono',monospace;font-size:0.58rem;color:var(--text3);letter-spacing:0.1em;text-transform:uppercase;padding:10px 0 7px;border-bottom:1px solid var(--border);margin-bottom:8px;}
+    .finding{border-radius:8px;margin-bottom:6px;border:1px solid var(--border);overflow:hidden;}
+    .finding-head{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;transition:background 0.12s;}
+    .finding-head:hover{background:rgba(255,255,255,0.03);}
+    .finding-sev-bar{width:3px;height:28px;border-radius:2px;flex-shrink:0;}
+    .finding-icon{font-size:1rem;flex-shrink:0;}
+    .finding-name{flex:1;font-size:0.78rem;font-weight:600;}
+    .finding-sev{font-family:'JetBrains Mono',monospace;font-size:0.6rem;font-weight:700;padding:2px 7px;border-radius:5px;}
+    .finding-conf{font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--text3);margin-left:4px;}
+    .finding-chevron{font-size:0.6rem;color:var(--text3);transition:transform 0.2s;margin-left:4px;}
+    .finding-chevron.open{transform:rotate(180deg);}
+    .finding-body{display:none;padding:0 12px 12px 12px;border-top:1px solid var(--border);}
+    .finding-body.open{display:block;}
+    .ev-card{background:var(--bg);border-radius:6px;padding:10px;margin-top:8px;border:1px solid var(--border);}
+    .ev-label{font-family:'JetBrains Mono',monospace;font-size:0.55rem;color:var(--text3);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:5px;}
+    .ev-label::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;}
+    .ev-label.evidence::before{background:var(--cyan);}
+    .ev-label.reasoning::before{background:var(--amber);}
+    .ev-label.object::before{background:var(--purple);}
+    .ev-label.impact::before{background:var(--red);}
+    .ev-text{font-size:0.74rem;color:var(--text2);line-height:1.65;margin-bottom:8px;}
+    .ev-text:last-child{margin-bottom:0;}
+    .ev-object-chip{display:inline-block;background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.35);color:var(--purple);font-family:'JetBrains Mono',monospace;font-size:0.68rem;font-weight:600;padding:3px 10px;border-radius:5px;margin-bottom:8px;}
+    .ev-impact-box{background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.25);border-radius:5px;padding:7px 10px;margin-bottom:8px;font-size:0.72rem;color:var(--text2);line-height:1.6;}
+    .conf-row{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);}
+    .conf-label{font-family:'JetBrains Mono',monospace;font-size:0.57rem;color:var(--text3);white-space:nowrap;}
+    .conf-track{flex:1;background:var(--border);border-radius:3px;height:6px;overflow:hidden;}
+    .conf-fill{height:100%;border-radius:3px;transition:width 0.6s;}
+    .conf-val{font-family:'JetBrains Mono',monospace;font-size:0.62rem;font-weight:700;min-width:32px;text-align:right;}
+    .clear-row{display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:6px;background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.1);margin-bottom:4px;}
+    .clear-row .cr-icon{font-size:0.8rem;}
+    .clear-row .cr-name{font-size:0.7rem;color:var(--text3);}
+    .clear-row .cr-badge{font-family:'JetBrains Mono',monospace;font-size:0.52rem;color:var(--green);margin-left:auto;}
+    .inspector-box{margin:8px 16px 16px;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.2);border-radius:7px;padding:10px 12px;}
+    .inspector-lbl{font-family:'JetBrains Mono',monospace;font-size:0.55rem;color:var(--purple);letter-spacing:0.1em;margin-bottom:4px;}
+    .inspector-text{font-size:0.75rem;color:var(--text2);line-height:1.6;}
+    .pop-close-wrap{padding:0 16px 16px;}
+    .pop-close{width:100%;padding:8px;background:transparent;border:1px solid var(--border2);color:var(--text2);border-radius:7px;cursor:pointer;font-family:'Inter',sans-serif;font-size:0.74rem;font-weight:500;transition:all 0.15s;}
+    .pop-close:hover{border-color:rgba(0,212,255,0.4);color:var(--cyan);}
+
+    /* PULSE ANIMATION for CRITICAL markers during playback */
+    @keyframes pulse-ring{0%{transform:scale(1);opacity:0.8}100%{transform:scale(2.2);opacity:0}}
+    .pb-pulse{animation:pulse-ring 1.2s ease-out infinite;}
+
+    /* REPORT */
+    .rovl{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:99999;align-items:flex-start;justify-content:center;backdrop-filter:blur(6px);overflow-y:auto;padding:20px 12px;}
+    .rovl.show{display:flex;}
+    .rbox{background:var(--panel);border:1px solid var(--border2);border-radius:14px;padding:24px;max-width:640px;width:100%;box-shadow:0 30px 80px rgba(0,0,0,0.7);margin:auto;flex-shrink:0;}
+    .r-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;gap:12px;}
+    .r-title{font-size:1rem;font-weight:700;color:var(--cyan);}
+    .r-sub{font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--text3);margin-top:3px;}
+    .r-close{background:transparent;border:1px solid var(--border2);color:var(--text3);padding:5px 10px;border-radius:6px;cursor:pointer;font-size:0.7rem;transition:all 0.15s;flex-shrink:0;}
+    .r-close:hover{border-color:var(--red);color:var(--red);}
+    .r-section{margin-bottom:18px;}
+    .r-section-title{font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--text3);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--border);}
+    .r-kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:12px;}
+    .r-kpi{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 8px;text-align:center;}
+    .r-kpi .rv{font-family:'JetBrains Mono',monospace;font-size:1.4rem;font-weight:700;}
+    .r-kpi .rl{font-size:0.55rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-top:2px;}
+    .r-risk-bar{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:8px 0;}
+    .r-risk-seg{transition:width 0.5s;}
+    .r-risk-labels{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:0.58rem;}
+    .r-feat-list{display:flex;flex-direction:column;gap:4px;}
+    .r-feat-row{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:0.72rem;}
+    .r-feat-name{display:flex;align-items:center;gap:5px;}
+    .r-feat-count{font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:var(--cyan);font-weight:700;}
+    .r-rec{font-size:0.75rem;line-height:1.8;color:var(--text2);}
+    .r-export-row{display:flex;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border);}
+    .r-export-btn{flex:1;padding:9px;border:none;border-radius:7px;font-family:'Inter',sans-serif;font-weight:600;font-size:0.74rem;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;justify-content:center;gap:6px;}
+    .r-btn-pdf{background:rgba(239,68,68,0.15);color:var(--red);border:1px solid rgba(239,68,68,0.35);}
+    .r-btn-pdf:hover{background:rgba(239,68,68,0.28);border-color:var(--red);}
+    .r-btn-csv{background:rgba(16,185,129,0.15);color:var(--green);border:1px solid rgba(16,185,129,0.35);}
+    .r-btn-csv:hover{background:rgba(16,185,129,0.28);border-color:var(--green);}
+  
+    /* ── DASHBOARD TAB ── */
+    .view-tabs{display:flex;background:var(--panel);border-bottom:1px solid var(--border);z-index:10;flex-shrink:0;}
+    .view-tab{flex:1;padding:8px;font-family:'JetBrains Mono',monospace;font-size:0.62rem;font-weight:700;color:var(--text3);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;letter-spacing:0.05em;}
+    .view-tab.active{color:var(--cyan);border-bottom-color:var(--cyan);}
+    #dashboardView{display:none;flex:1;overflow-y:auto;background:var(--bg);padding:14px;gap:12px;flex-direction:column;}
+    #dashboardView.active{display:flex;}
+    .db-section{background:var(--panel);border:1px solid var(--border2);border-radius:10px;padding:12px 14px;}
+    .db-section-title{font-family:'JetBrains Mono',monospace;font-size:0.58rem;color:var(--text3);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:10px;}
+    .db-stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+    .db-stat{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center;}
+    .db-stat .dsv{font-family:'JetBrains Mono',monospace;font-size:1.3rem;font-weight:700;}
+    .db-stat .dsl{font-size:0.55rem;color:var(--text3);text-transform:uppercase;margin-top:2px;}
+    .snap-grid{display:flex;flex-direction:column;gap:8px;}
+    .snap-card{background:var(--panel2);border:1px solid var(--border);border-radius:8px;overflow:hidden;display:flex;cursor:pointer;transition:border-color 0.15s;}
+    .snap-card:hover{border-color:var(--cyan);}
+    .snap-img{width:72px;height:60px;object-fit:cover;flex-shrink:0;}
+    .snap-body{padding:7px 10px;flex:1;min-width:0;}
+    .snap-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+    .snap-loc{font-family:'JetBrains Mono',monospace;font-size:0.65rem;font-weight:700;color:var(--text);}
+    .snap-risk{font-family:'JetBrains Mono',monospace;font-size:0.55rem;font-weight:700;padding:2px 7px;border-radius:4px;}
+    .snap-yn{display:flex;flex-wrap:wrap;gap:3px;margin-top:3px;}
+    .snap-yn-chip{font-size:0.52rem;padding:1px 5px;border-radius:3px;border:1px solid var(--border);color:var(--text3);}
+    .snap-yn-chip.yes{color:#10b981;border-color:rgba(16,185,129,0.3);}
+    .snap-yn-chip.no{color:#ef4444;border-color:rgba(239,68,68,0.3);}
+    .yn-table{width:100%;border-collapse:collapse;font-size:0.62rem;overflow-x:auto;display:block;}
+    .yn-table th{background:var(--panel2);padding:5px 8px;text-align:center;border:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:0.52rem;color:var(--text3);font-weight:600;white-space:nowrap;}
+    .yn-table th.loc-th{text-align:left;}
+    .yn-table td{padding:4px 6px;border:1px solid var(--border);text-align:center;font-size:0.65rem;}
+    .yn-table td.loc-td{text-align:left;font-family:'JetBrains Mono',monospace;font-size:0.58rem;color:var(--text2);white-space:nowrap;}
+    .yn-table tr:nth-child(even) td{background:rgba(255,255,255,0.02);}
+    .yn-yes{color:#10b981;font-weight:700;}
+    .yn-no{color:#ef4444;}
+    .yn-na{color:var(--text3);}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="brand-dot"></div>
+    <div class="brand-name">Kumbh Analyzer</div>
+  </div>
+  <div class="status-chip" id="statusChip">Import session to begin</div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <div class="tog-wrap">
+      <span class="tog-lbl">Heatmap</span>
+      <label class="tog"><input type="checkbox" id="heatmapToggle" onchange="toggleHeatmap(this.checked)"/><div class="tog-bar"></div></label>
+    </div>
+    <div class="tog-wrap">
+      <span class="tog-lbl">☀️</span>
+      <label class="tog"><input type="checkbox" id="themeToggle" checked onchange="toggleTheme(this.checked)"/><div class="tog-bar"></div></label>
+      <span class="tog-lbl">🌙</span>
+    </div>
+    <a href="./index.html" class="nav-btn">← Mapper</a>
+  </div>
+</header>
+
+<div class="main">
+  <div class="panel">
+    <div class="block">
+      <div class="lbl">Audit Summary</div>
+      <div class="summary" id="summaryCard">
+        <div class="sum-title">⚡ AUDIT COMPLETE</div>
+        <div class="sum-kpis">
+          <div class="sum-kpi"><div class="sv" id="sumTotal" style="color:var(--cyan)">0</div><div class="sl">Locations</div></div>
+          <div class="sum-kpi"><div class="sv" id="sumCritical" style="color:var(--crimson)">0</div><div class="sl">Critical</div></div>
+          <div class="sum-kpi"><div class="sv" id="sumHigh" style="color:var(--red)">0</div><div class="sl">High Risk</div></div>
+          <div class="sum-kpi"><div class="sv" id="sumSafe" style="color:var(--green)">0</div><div class="sl">Low Risk</div></div>
+        </div>
+        <div class="sum-top-risk" id="sumTopRisk"></div>
+      </div>
+      <div id="sumEmpty" style="font-size:0.65rem;color:var(--text3);padding:6px 0;">Summary appears after audit</div>
+    </div>
+    <div class="block">
+      <div class="lbl">Import — Session JSON</div>
+      <div class="dz" id="jsonDZ">
+        <input type="file" accept=".json" id="jsonInput"/>
+        <div class="dz-icon">📄</div>
+        <div class="dz-text"><strong>Drop session JSON here</strong>Exported from Kumbh Mapper</div>
+      </div>
+    </div>
+    <div class="block">
+      <div class="lbl">Import — Direct / Insta 360</div>
+      <div class="dz" id="photoDZ">
+        <input type="file" accept="image/*" id="photoInput" multiple/>
+        <div class="dz-icon">📷</div>
+        <div class="dz-text"><strong>Drop photos here</strong>GPS auto-read from EXIF</div>
+      </div>
+    </div>
+    <div class="block">
+      <button class="btn btn-primary" id="btnAnalyze" disabled>⚡ Run Field Audit (Groq AI)</button>
+      <button class="btn btn-playback" id="btnPlayback" disabled style="margin-top:4px;">▶ Survey Timeline Playback</button>
+      <button class="btn btn-ghost" id="btnReport" disabled style="margin-top:4px;">📋 View Audit Report</button>
+      <div class="export-row">
+        <button class="btn-export btn-pdf" id="btnExportPDF" disabled>⬇ PDF</button>
+        <button class="btn-export btn-csv" id="btnExportCSV" disabled>⬇ CSV</button>
+      </div>
+      <button class="btn btn-danger" id="btnClear" disabled style="margin-top:4px;">✕ Clear All</button>
+      <div class="prog-wrap" id="progWrap">
+        <div class="prog-track"><div class="prog-fill" id="progFill"></div></div>
+        <div class="prog-text" id="progText">0 / 0</div>
+      </div>
+    </div>
+    <div class="block">
+      <div class="lbl">Live Stats</div>
+      <div class="kpi-row">
+        <div class="kpi"><div class="kv" id="stTotal">0</div><div class="kl">Photos</div></div>
+        <div class="kpi"><div class="kv" id="stDone" style="color:var(--green)">0</div><div class="kl">Audited</div></div>
+        <div class="kpi"><div class="kv" id="stDanger" style="color:var(--red)">0</div><div class="kl">High+</div></div>
+      </div>
+      <div class="legend">
+        <div class="leg-item"><div class="leg-dot" style="background:var(--crimson)"></div>Critical</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--red)"></div>High</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--amber)"></div>Medium</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--green)"></div>Low</div>
+      </div>
+    </div>
+    <div class="feed" id="feed">
+      <div class="feed-empty" id="feedEmpty"><div class="ei">🗺️</div>Import JSON or photos<br>to begin field audit</div>
+    </div>
+  </div>
+
+  <!-- VIEW TABS -->
+  <div class="view-tabs">
+    <button class="view-tab active" id="tabMap" onclick="switchView('map')">🗺 MAP VIEW</button>
+    <button class="view-tab" id="tabDash" onclick="switchView('dashboard')">📊 DASHBOARD</button>
+  </div>
+
+  <!-- DASHBOARD VIEW -->
+  <div id="dashboardView">
+    <!-- Summary Stats -->
+    <div class="db-section" id="dbStats" style="display:none">
+      <div class="db-section-title">📊 Audit Overview</div>
+      <div class="db-stat-grid" id="dbStatGrid"></div>
+    </div>
+    <!-- Yes/No Checklist Table -->
+    <div class="db-section" id="dbYNSection" style="display:none">
+      <div class="db-section-title">✅ Location Checklist — Yes / No</div>
+      <div style="overflow-x:auto;"><table class="yn-table" id="dbYNTable"></table></div>
+    </div>
+    <!-- Chokepoints / Bottlenecks -->
+    <div class="db-section" id="dbChokeSection" style="display:none">
+      <div class="db-section-title">🚧 Crowd Flow — Chokepoints / Bottlenecks</div>
+      <div style="font-size:0.62rem;color:var(--text3);margin-bottom:8px;">Narrowest / lowest-capacity points on this route — prioritize these for traffic control or widening.</div>
+      <div id="dbChokeList"></div>
+    </div>
+    <!-- Location Snapshots -->
+    <div class="db-section" id="dbSnapSection" style="display:none">
+      <div class="db-section-title">📍 Location Snapshots</div>
+      <div class="snap-grid" id="dbSnapGrid"></div>
+    </div>
+    <div id="dbEmpty" style="color:var(--text3);font-size:0.7rem;text-align:center;margin:40px auto;">Run field audit to see dashboard</div>
+  </div>
+
+  <!-- MAP AREA with playback overlay inside -->
+  <div id="map" class="active-view">
+    <!-- TIMELINE PLAYBACK OVERLAY — lives inside map div -->
+    <div class="pb-ovl" id="pbOvl">
+      <div class="pb-card">
+        <div class="pb-top">
+          <div class="pb-title">📍 SURVEY TIMELINE PLAYBACK</div>
+          <button class="pb-close" onclick="stopPlayback()">✕ Exit</button>
+        </div>
+
+        <!-- LIVE EVIDENCE STRIP -->
+        <div class="pb-evidence" id="pbEvidence">
+          <div style="color:var(--text3);font-size:0.68rem;margin:auto;">Press Play to start survey replay</div>
+        </div>
+
+        <!-- LIVE COUNTERS -->
+        <div class="pb-counters">
+          <div class="pb-cnt"><div class="pv" id="pbCntDone" style="color:var(--cyan)">0</div><div class="pl">Visited</div></div>
+          <div class="pb-cnt"><div class="pv" id="pbCntCrit" style="color:var(--crimson)">0</div><div class="pl">Critical</div></div>
+          <div class="pb-cnt"><div class="pv" id="pbCntHigh" style="color:var(--red)">0</div><div class="pl">High</div></div>
+          <div class="pb-cnt"><div class="pv" id="pbCntSafe" style="color:var(--green)">0</div><div class="pl">Safe</div></div>
+        </div>
+
+        <!-- SCRUBBER -->
+        <div class="pb-scrub-wrap">
+          <div class="pb-scrub-track" id="pbScrubTrack" onclick="scrubTo(event)">
+            <div class="pb-scrub-fill" id="pbScrubFill"></div>
+            <div class="pb-scrub-thumb" id="pbScrubThumb"></div>
+          </div>
+          <div class="pb-scrub-labels">
+            <span id="pbScrubCur">Location 0 / 0</span>
+            <span id="pbScrubTime">—</span>
+          </div>
+        </div>
+
+        <!-- CONTROLS -->
+        <div class="pb-controls">
+          <button class="pb-btn" id="pbBtnPrev" onclick="pbStep(-1)">⏮</button>
+          <button class="pb-btn active" id="pbBtnPlay" onclick="togglePlay()">▶ Play</button>
+          <button class="pb-btn" id="pbBtnNext" onclick="pbStep(1)">⏭</button>
+          <div class="pb-speed">
+            Speed:
+            <button class="pb-speed-btn" onclick="setSpeed(1500)" id="spd1">1×</button>
+            <button class="pb-speed-btn on" onclick="setSpeed(900)" id="spd2">2×</button>
+            <button class="pb-speed-btn" onclick="setSpeed(400)" id="spd3">3×</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- POPUP -->
+<div class="pop-ovl" id="popOvl">
+  <div class="pop-box">
+    <div class="pop-photo" id="popPhotoWrap">
+      <img id="popImg" src="" alt=""/>
+      <div id="popAnnotations"></div>
+      <div class="pop-photo-tags" id="popPhotoTags"></div>
+      <div class="pop-risk-chip" id="popRiskChip" style="display:none"></div>
+    </div>
+
+    <!-- EVIDENCE SUMMARY CARD — NEW -->
+    <div class="ev-summary" id="evSummary" style="display:none">
+      <div class="ev-summary-head">
+        <div class="ev-summary-title">⚠ Evidence Summary</div>
+        <div class="ev-summary-risk" id="evSumRisk"></div>
+      </div>
+      <div class="ev-summary-body">
+        <div class="ev-hazard-tags" id="evHazardTags"></div>
+        <div class="ev-verdict" id="evVerdict"></div>
+      </div>
+    </div>
+
+    <div class="pop-meta" id="popMeta"></div>
+
+    <!-- QUANTIFICATION CARD -->
+    <div class="quant-card" id="quantCard" style="display:none">
+      <div class="quant-head">
+        <div class="quant-title">📊 Scene Quantification</div>
+        <div class="quant-zone" id="quantZone">—</div>
+      </div>
+      <div class="quant-grid">
+        <div class="quant-cell"><div class="qk">Road Width</div><div class="qv" id="quantWidth">—</div></div>
+        <div class="quant-cell"><div class="qk">Area (est.)</div><div class="qv" id="quantArea">—</div></div>
+        <div class="quant-cell"><div class="qk">Intersection</div><div class="qv" id="quantInt" style="font-size:0.6rem">—</div></div>
+        <div class="quant-cell"><div class="qk">Pedestrians</div><div class="qv" id="quantPed" style="color:var(--cyan)">—</div><div id="quantPedVerify" style="font-size:0.55rem;margin-top:2px;"></div></div>
+        <div class="quant-cell"><div class="qk">Vehicles</div><div class="qv" id="quantVeh" style="color:var(--amber)">—</div></div>
+        <div class="quant-cell"><div class="qk">Potholes</div><div class="qv" id="quantPot" style="color:var(--red)">—</div></div>
+        <div class="quant-cell"><div class="qk">Puddles</div><div class="qv" id="quantPuddle" style="color:var(--cyan)">—</div></div>
+        <div class="quant-cell"><div class="qk">Motion</div><div class="qv" id="quantMotion" style="font-size:0.6rem">—</div></div>
+        <div class="quant-cell"><div class="qk">Zone Type</div><div class="qv" id="quantZoneSmall" style="font-size:0.6rem;color:var(--purple)">—</div></div>
+      </div>
+
+      <!-- Walkability -->
+      <div class="quant-vehicles" id="quantWalkWrap" style="display:none">
+        <div class="qk">🚶 WALKABILITY FOR PILGRIMS</div>
+        <div id="quantWalkVal" style="font-size:0.75rem;font-weight:700;margin:3px 0 2px;">—</div>
+        <div id="quantWalkReason" style="font-size:0.68rem;color:var(--text2);"></div>
+      </div>
+
+      <!-- Crowd Flow Capacity -->
+      <div class="quant-vehicles" id="quantFlowWrap" style="display:none">
+        <div class="qk">🌊 CROWD FLOW CAPACITY</div>
+        <div id="quantFlowVal" style="font-size:0.78rem;font-weight:700;margin:3px 0 2px;">—</div>
+        <div id="quantFlowDetail" style="font-size:0.65rem;color:var(--text3);"></div>
+        <div id="quantFlowDensity" style="font-size:0.65rem;color:var(--text2);margin-top:3px;"></div>
+        <div id="quantFlowWarn" style="display:none;font-size:0.65rem;color:var(--amber);background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:5px;padding:6px 8px;margin-top:6px;"></div>
+      </div>
+
+      <!-- Footpath -->
+      <div class="quant-vehicles" id="quantFootWrap" style="display:none">
+        <div class="qk">🛤 FOOTPATH / PAVEMENT</div>
+        <div id="quantFootVal" style="font-size:0.72rem;font-weight:600;margin:3px 0 2px;">—</div>
+        <div id="quantFootDetail" style="font-size:0.65rem;color:var(--text3);"></div>
+        <div id="quantFootWarn" style="display:none;font-size:0.62rem;color:var(--amber);margin-top:4px;">⚠ Unverified — high vehicle count in frame, footpath claim may be inaccurate</div>
+      </div>
+
+      <!-- Yes/No Quick Summary -->
+      <div class="quant-vehicles" id="quantYNWrap" style="display:none">
+        <div class="qk">✅ QUICK CHECKLIST</div>
+        <div id="quantYNGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:5px;"></div>
+      </div>
+
+      <!-- Occlusions -->
+      <div class="quant-vehicles" id="quantOccWrap" style="display:none">
+        <div class="qk">🚧 OBSTRUCTIONS / OCCLUSIONS</div>
+        <div id="quantOccVal" style="font-size:0.7rem;color:var(--text2);margin-top:3px;"></div>
+      </div>
+
+      <!-- Locality clues -->
+      <div class="quant-vehicles" id="quantLocalWrap" style="display:none">
+        <div class="qk">🏪 LOCALITY CLUES</div>
+        <div id="quantLocalVal" style="font-size:0.7rem;color:var(--text2);margin-top:3px;"></div>
+      </div>
+
+      <div class="quant-vehicles" id="quantVehTypes" style="display:none">
+        <div class="qk">Vehicle Types Detected</div>
+        <div id="quantVehTags"></div>
+      </div>
+      <div class="quant-boards" id="quantBoards" style="display:none">
+        <div class="qk">Signboards / Text Detected</div>
+        <div id="quantBoardTags"></div>
+      </div>
+    </div>
+
+    <div class="scene-box" id="sceneSec" style="display:none">
+      <div class="scene-lbl">AI SCENE ANALYSIS</div>
+      <div class="scene-text" id="sceneText"></div>
+    </div>
+    <div class="findings-wrap">
+      <div class="findings-header" id="findingsHeader">FIELD AUDIT FINDINGS</div>
+      <div id="findingsContent"></div>
+    </div>
+    <div class="inspector-box" id="inspectorSec" style="display:none">
+      <div class="inspector-lbl">👮 INSPECTOR RECOMMENDATION</div>
+      <div class="inspector-text" id="inspectorText"></div>
+    </div>
+    <div class="pop-close-wrap">
+      <button class="pop-close" onclick="closePopup()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- REPORT MODAL -->
+<div class="rovl" id="reportOvl">
+  <div class="rbox">
+    <div class="r-head">
+      <div>
+        <div class="r-title">📋 Field Safety Audit Report</div>
+        <div class="r-sub" id="rSub">Kumbh Path Mapper · AI-powered ground survey</div>
+      </div>
+      <button class="r-close" onclick="document.getElementById('reportOvl').classList.remove('show')">✕ Close</button>
+    </div>
+    <div id="reportContent"></div>
+    <div class="r-export-row">
+      <button class="r-export-btn r-btn-pdf" id="rBtnPDF">📄 Export PDF</button>
+      <button class="r-export-btn r-btn-csv" id="rBtnCSV">📊 Export CSV</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ── MAP ──────────────────────────────────────────────────────
+const map = L.map('map', { zoomControl:false }).setView([25.4358, 81.8463], 15);
+let tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap © CARTO',maxZoom:19}).addTo(map);
+L.control.zoom({position:'bottomright'}).addTo(map);
+setTimeout(()=>map.invalidateSize(),100);
+
+const mkIcon=(n,c='#00d4ff')=>L.divIcon({className:'',html:`<div style="background:${c};color:#111318;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:8px;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 0 12px ${c}88;border:1.5px solid rgba(255,255,255,0.15);">${n}</div>`,iconSize:[26,26],iconAnchor:[13,13]});
+
+const mkIconLarge=(n,c='#00d4ff')=>L.divIcon({className:'',html:`<div style="background:${c};color:#111318;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:9px;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 0 20px ${c};border:2px solid rgba(255,255,255,0.3);">${n}</div>`,iconSize:[36,36],iconAnchor:[18,18]});
+
+// Chokepoint marker — same risk-colored circle + a pulsing amber alert ring
+// and badge, so narrow/low-capacity points stand out on the route at a glance.
+const mkIconChoke=(n,c='#00d4ff')=>L.divIcon({className:'',html:`<div style="position:relative;width:30px;height:30px;">
+  <div style="position:absolute;inset:-3px;border:2px dashed #f59e0b;border-radius:50%;animation:pulse-ring 1.5s ease-out infinite;"></div>
+  <div style="position:absolute;top:2px;left:2px;background:${c};color:#111318;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:8px;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 0 12px ${c}88;border:1.5px solid rgba(255,255,255,0.15);">${n}</div>
+  <div style="position:absolute;top:-6px;right:-6px;background:#f59e0b;color:#111318;border-radius:50%;width:14px;height:14px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;border:1.5px solid #111318;">⚠</div>
+</div>`,iconSize:[30,30],iconAnchor:[15,15]});
+
+// ── CONSTANTS ────────────────────────────────────────────────
+const SEV_CONFIG={NONE:{color:'#4b5563',label:'Clear'},LOW:{color:'#10b981',label:'Low'},MEDIUM:{color:'#f59e0b',label:'Medium'},HIGH:{color:'#ef4444',label:'High'},CRITICAL:{color:'#dc2626',label:'Critical'}};
+const ICONS={slippery:'💧',waterlogged:'🌊',mud:'🟫',stampede_risk:'🚨',high_crowd_density:'👥',broken_barrier:'⛔',electric_wire:'⚡',narrow_path:'🛤️',bottleneck:'🔻',stairs:'🪜',ghat:'🏔️',river_edge:'🌊',barrier:'🚧',approaching_road:'🚦',garbage:'🗑️',wide_road:'🛣️',tree_canopy:'🌳',shade:'☂️',open_space:'🏟️',medical_post:'🏥',signage:'🪧',police_presence:'👮'};
+const FEATURE_NAMES={slippery:'Slippery Surface',waterlogged:'Waterlogged Path',mud:'Mud / Loose Soil',stampede_risk:'Stampede Risk',high_crowd_density:'High Crowd Density',broken_barrier:'Broken Barrier',electric_wire:'Electric Wire Hazard',narrow_path:'Narrow Path',bottleneck:'Bottleneck / Choke Point',stairs:'Stairs / Steps',ghat:'Ghat / River Bank',river_edge:'River Edge Proximity',barrier:'Barrier / Fence',approaching_road:'Road / Vehicle Zone',garbage:'Garbage / Waste',wide_road:'Wide Road',tree_canopy:'Tree Canopy Cover',shade:'Shade Available',open_space:'Open Space',medical_post:'Medical Post',signage:'Signage',police_presence:'Police / Security'};
+const HAZARD_IDS=['slippery','waterlogged','mud','stampede_risk','high_crowd_density','broken_barrier','electric_wire','narrow_path','bottleneck','stairs','ghat','river_edge','barrier','approaching_road','garbage','pothole','vehicle_pedestrian_conflict'];
+const POSITIVE_IDS=['wide_road','tree_canopy','shade','open_space','medical_post','signage','police_presence'];
+
+function overallRisk(findings){const h=findings.filter(f=>HAZARD_IDS.includes(f.id));if(h.some(f=>f.severity==='CRITICAL'))return'CRITICAL';if(h.some(f=>f.severity==='HIGH'))return'HIGH';if(h.some(f=>f.severity==='MEDIUM'))return'MEDIUM';if(h.some(f=>f.severity==='LOW'))return'LOW';return'CLEAR';}
+function riskColor(r){return{CRITICAL:'#dc2626',HIGH:'#ef4444',MEDIUM:'#f59e0b',LOW:'#10b981',CLEAR:'#00d4ff'}[r]||'#00d4ff';}
+
+// ── CROWD FLOW CAPACITY ─────────────────────────────────────────
+// Based on Fruin's Pedestrian Planning & Design Level-of-Service (LOS)
+// standard (J.J. Fruin, 1971) — the classic, widely-cited reference used in
+// crowd-safety/venue/evacuation planning worldwide.
+//   LOS density bands (persons per sq.m of open area):
+//     A <0.08  B 0.08–0.27  C 0.27–0.43  D 0.43–0.72  E 0.72–2.2  F >2.2
+//   LOS-based design flow rate bands (persons / min / metre of width):
+//     A <23  B 23–33  C 33–49  D 49–66  E 66–82  F >82 (jammed/unstable)
+// We use the LOS-D upper bound (49 ppl/min/m) as the recommended SAFE design
+// capacity — beyond this (LOS E/F) crowd flow becomes congested and, in a
+// religious mass-gathering context, risk of crowd crush rises sharply.
+const FLOW_LOS_BANDS = [
+  {max:23, label:'A — Free flow', color:'#10b981'},
+  {max:33, label:'B — Comfortable', color:'#10b981'},
+  {max:49, label:'C — Acceptable', color:'#f59e0b'},
+  {max:66, label:'D — Restricted (design max)', color:'#f59e0b'},
+  {max:82, label:'E — Congested', color:'#ef4444'},
+  {max:Infinity, label:'F — Jammed / crush risk', color:'#dc2626'}
+];
+const DENSITY_LOS_BANDS = [
+  {max:0.08, label:'A — Free flow', color:'#10b981'},
+  {max:0.27, label:'B — Comfortable', color:'#10b981'},
+  {max:0.43, label:'C — Acceptable', color:'#f59e0b'},
+  {max:0.72, label:'D — Restricted', color:'#f59e0b'},
+  {max:2.2,  label:'E — Congested', color:'#ef4444'},
+  {max:Infinity, label:'F — Jammed / crush risk', color:'#dc2626'}
+];
+const SAFE_DESIGN_FLOW_RATE = 49; // ppl/min/m, Fruin LOS-D upper bound
+
+function computeCrowdFlow(q){
+  if(!q || !q.road_width_meters) return null;
+  const roadW = q.road_width_meters;
+  const claimsFootpath = (q.footpath_present==='yes'||q.footpath_present==='partial') && q.footpath_width_meters>0;
+
+  // Reliability check: the AI's footpath claim is less trustworthy when a lot
+  // of vehicles are visible in the same frame. Two reasons:
+  // 1) Dense parking commonly encroaches onto or hides a footpath, so a width
+  //    estimated from one photo may already be partly blocked in practice.
+  // 2) When a footpath sits at road level with no raised curb, a vision model
+  //    can struggle to tell footpath from road, especially with cars parked
+  //    along the edge (as observed in this project's testing).
+  // This is OUR OWN heuristic, not from any external standard — threshold
+  // chosen conservatively at 6+ vehicles in frame.
+  const footpathUncertain = claimsFootpath && (q.vehicle_count||0) >= 6;
+  const hasFootpath = claimsFootpath && !footpathUncertain;
+
+  // Effective pedestrian-usable width — documented assumption:
+  // - If a dedicated, reliably-claimed footpath exists, pilgrims primarily use that.
+  // - Otherwise (no footpath, OR footpath claim is unverified per above),
+  //   conservatively assume only 70% of road width is usable for pedestrians
+  //   (rest shared with / blocked by vehicle traffic), as a safety margin.
+  const effectiveWidth = hasFootpath ? q.footpath_width_meters : +(roadW*0.7).toFixed(1);
+  const maxSafeFlow = Math.round(effectiveWidth * SAFE_DESIGN_FLOW_RATE); // ppl/min that can safely pass at design (LOS-D) rate
+
+  // For transparency, also report what capacity WOULD be if the AI's footpath
+  // claim were trusted as-is, so the UI can show the range when uncertain.
+  let claimedFlow = null;
+  if (footpathUncertain) {
+    claimedFlow = Math.round(q.footpath_width_meters * SAFE_DESIGN_FLOW_RATE);
+  }
+
+  let density = null, densityLOS = null;
+  if(q.area_estimate_sqm && typeof q.pedestrian_count === 'number'){
+    density = +(q.pedestrian_count / q.area_estimate_sqm).toFixed(2);
+    densityLOS = DENSITY_LOS_BANDS.find(b=>density<=b.max) || DENSITY_LOS_BANDS[DENSITY_LOS_BANDS.length-1];
+  }
+
+  const basis = hasFootpath
+    ? 'footpath width'
+    : footpathUncertain
+      ? `70% of road width (footpath claim unverified — ${q.vehicle_count} vehicles in frame)`
+      : '70% of road width (no dedicated footpath)';
+
+  return { effectiveWidth, hasFootpath, footpathUncertain, claimedFlow, maxSafeFlow, density, densityLOS, basis };
+}
+
+// ── BOTTLENECK / CHOKEPOINT DETECTION ───────────────────────────
+// Flags a location as a route chokepoint if EITHER:
+//   - it's currently observed at LOS E/F (congested/crush-risk density), OR
+//   - its max safe flow capacity is in the bottom 25% of all audited points
+//     on this route (i.e. it's the narrowest pinch-point relative to the rest)
+function identifyChokepoints(){
+  const done = queue.filter(p=>p.status==='done'&&p.aiData?.quantification);
+  const withFlow = done.map(p=>({ id:p.id, flow:computeCrowdFlow(p.aiData.quantification) })).filter(p=>p.flow);
+  if(!withFlow.length) return [];
+  const sortedFlows = withFlow.map(p=>p.flow.maxSafeFlow).slice().sort((a,b)=>a-b);
+  const pctThreshold = sortedFlows[Math.max(0, Math.floor(sortedFlows.length*0.25)-1)];
+  const isCongested = los => los && (los.label.startsWith('E')||los.label.startsWith('F'));
+  return withFlow.filter(p =>
+    isCongested(p.flow.densityLOS) ||
+    (withFlow.length>=3 && p.flow.maxSafeFlow<=pctThreshold)
+  ).map(p=>({ id:p.id, flow:p.flow }));
+}
+
+function refreshChokepointMarkers(){
+  const chokepoints = identifyChokepoints();
+  const chokeIds = new Set(chokepoints.map(c=>c.id));
+  queue.filter(p=>p.status==='done'&&p.aiData).forEach(item=>{
+    const c = riskColor(item.aiData.overall_risk);
+    const icon = chokeIds.has(item.id) ? mkIconChoke(item.id, c) : mkIcon(item.id, c);
+    mkrs[item.id]?.setIcon(icon);
+  });
+  return chokepoints;
+}
+
+// ── STATE ────────────────────────────────────────────────────
+let queue=[],mkrs={},heatCircles=[],analyzing=false,heatmapEnabled=false;
+let pbPlaying=false,pbIndex=-1,pbTimer=null,pbSpeed=900;
+let pbPolyline=null, pbRevealedMkrs={};
+let poly=L.polyline([],{color:'#00d4ff',weight:2,opacity:0.5,dashArray:'5,4'}).addTo(map);
+
+// ── THEME ────────────────────────────────────────────────────
+function toggleTheme(isDark){
+  document.body.classList.toggle('light',!isDark);
+  map.removeLayer(tileLayer);
+  tileLayer=L.tileLayer(isDark?'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png':'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap © CARTO',maxZoom:19}).addTo(map);
+}
+
+// ── HEATMAP ──────────────────────────────────────────────────
+function toggleHeatmap(enabled){heatmapEnabled=enabled;if(enabled)drawHeatmap();else{heatCircles.forEach(c=>map.removeLayer(c));heatCircles=[];}}
+function drawHeatmap(){
+  heatCircles.forEach(c=>map.removeLayer(c));heatCircles=[];
+  if(!heatmapEnabled)return;
+  queue.filter(p=>p.aiData).forEach(item=>{
+    const c=riskColor(item.aiData.overall_risk||'LOW');
+    const r=['CRITICAL','HIGH'].includes(item.aiData.overall_risk)?70:40;
+    const circle=L.circle([item.lat,item.lng],{radius:r,color:c,fillColor:c,fillOpacity:0.18,opacity:0.4,weight:1}).addTo(map);
+    heatCircles.push(circle);
+  });
+}
+
+// ── API ──────────────────────────────────────────────────────
+// ── IMAGE COMPRESS — resize to 1280px max before sending ──
+function compressImage(b64){
+  return new Promise(resolve=>{
+    const img=new Image();
+    img.onload=()=>{
+      const MAX=1280;
+      let w=img.width, h=img.height;
+      if(w<=MAX&&h<=MAX){ resolve(b64); return; }
+      const ratio=Math.min(MAX/w, MAX/h);
+      w=Math.round(w*ratio); h=Math.round(h*ratio);
+      const c=document.createElement('canvas');
+      c.width=w; c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      // quality 0.82 — good balance of size vs detail
+      resolve(c.toDataURL('image/jpeg',0.82).split(',')[1]);
+    };
+    img.onerror=()=>resolve(b64); // fallback — send original
+    img.src='data:image/jpeg;base64,'+b64;
+  });
+}
+
+async function callGroq(b64){
+  const compressed = await compressImage(b64);
+  const res=await fetch('/.netlify/functions/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:compressed})});
+  if(!res.ok)throw new Error(await res.text());
+  const raw=await res.json();
+  if(raw.error)throw new Error(raw.error);
+
+  // Include new hazards: pothole + vehicle_pedestrian_conflict
+  const ALL_FEATURE_NAMES = {...FEATURE_NAMES, pothole:'Pothole / Road Damage', vehicle_pedestrian_conflict:'Vehicle-Pedestrian Conflict'};
+  const bboxes = raw.bboxes || {};
+  const findings=Object.keys(ALL_FEATURE_NAMES).map(id=>{
+    const bbox = bboxes[id];
+    return {id,name:ALL_FEATURE_NAMES[id],severity:raw[id]?.severity||'NONE',confidence:raw[id]?.confidence||0,detected_object:raw[id]?.detected_object||'',visual_evidence:raw[id]?.visual_evidence||'',pilgrim_impact:raw[id]?.pilgrim_impact||'',quadrant:raw[id]?.quadrant||'not-visible',bbox_x_pct:bbox?bbox[0]:null,bbox_y_pct:bbox?bbox[1]:null,bbox_w_pct:bbox?bbox[2]:null,bbox_h_pct:bbox?bbox[3]:null,location_in_frame:raw[id]?.location_in_frame||'',reasoning:raw[id]?.reasoning||''};
+  });
+
+  // Quantification data — pass through ALL fields the AI returns.
+  // (Previously only a handful of keys were copied here, so area_estimate_sqm,
+  // motion_direction, walkability, footpath_*, puddle_*, yes_no_summary etc.
+  // were silently dropped — that's why Area/Motion/Walkable always showed "—".)
+  const quant = raw.quantification || {};
+  const ynRaw = quant.yes_no_summary || {};
+  const risk = overallRisk(findings);
+
+  // Walkability reliability fix:
+  // 1) If the AI left walkability blank, derive a sane value from the computed
+  //    risk instead of leaving the UI blank.
+  // 2) If the AI says "no" but we found zero real hazards (risk LOW/CLEAR),
+  //    that's a contradiction — a clear road can't be "not walkable" — so we
+  //    soften it to "partial" rather than show conflicting info.
+  let walkability = quant.walkability || '';
+  if (!walkability) {
+    walkability = (risk === 'CRITICAL' || risk === 'HIGH') ? 'no' : (risk === 'MEDIUM' ? 'partial' : 'yes');
+  } else if (walkability === 'no' && (risk === 'LOW' || risk === 'CLEAR')) {
+    walkability = 'partial';
+  }
+
+  return{
+    findings,
+    overall_risk:risk,
+    scene_summary:raw.scene_summary||'',
+    inspector_note:raw.inspector_note||'',
+    quantification: {
+      road_width_meters: quant.road_width_meters || null,
+      area_estimate_sqm: quant.area_estimate_sqm || null,
+      intersection_type: quant.intersection_type || 'not visible',
+      pedestrian_count: quant.pedestrian_count ?? 0,
+      vehicle_count: quant.vehicle_count ?? 0,
+      vehicle_types: quant.vehicle_types || [],
+      motion_direction: quant.motion_direction || null,
+      pothole_count: quant.pothole_count ?? 0,
+      puddle_count: quant.puddle_count ?? 0,
+      puddle_locations: quant.puddle_locations || [],
+      zone_type: quant.zone_type || 'unknown',
+      locality_clues: quant.locality_clues || '',
+      signboards_text: quant.signboards_text || [],
+      occlusions: quant.occlusions || '',
+      walkability,
+      walkability_reason: quant.walkability_reason || '',
+      footpath_present: quant.footpath_present || 'no',
+      footpath_location: quant.footpath_location || '',
+      footpath_width_meters: quant.footpath_width_meters || null,
+      footpath_condition: quant.footpath_condition || '',
+      yes_no_summary: {
+        waterlogging: ynRaw.waterlogging || 'no',
+        bottleneck: ynRaw.bottleneck || 'no',
+        crowd_risk: ynRaw.crowd_risk || 'no',
+        footpath_available: ynRaw.footpath_available || ((quant.footpath_present==='yes'||quant.footpath_present==='partial') ? 'yes' : 'no'),
+        vehicle_conflict: ynRaw.vehicle_conflict || 'no',
+        good_lighting: ynRaw.good_lighting || 'yes',
+        signage_present: ynRaw.signage_present || ((quant.signboards_text&&quant.signboards_text.length) ? 'yes' : 'no'),
+        obstruction_present: ynRaw.obstruction_present || 'no',
+      }
+    }
+  };
+}
+
+// ── EXIF ─────────────────────────────────────────────────────
+function readEXIF(file){return new Promise(resolve=>{const r=new FileReader();r.onload=ev=>{try{const v=new DataView(ev.target.result);if(v.getUint16(0)!==0xFFD8){resolve(null);return;}let off=2;while(off<v.byteLength){const mk=v.getUint16(off);if(mk===0xFFE1){const es=String.fromCharCode(...new Uint8Array(ev.target.result,off+4,4));if(es==='Exif'){const to=off+10,le=v.getUint16(to)===0x4949;const ifo=v.getUint32(to+4,le),en=v.getUint16(to+ifo,le);let go=null;for(let i=0;i<en;i++){const t=v.getUint16(to+ifo+2+i*12,le);if(t===0x8825){go=v.getUint32(to+ifo+2+i*12+8,le);break;}}if(go!==null){const ge=v.getUint16(to+go,le);let lat=null,lng=null,lr='N',lo='E';for(let i=0;i<ge;i++){const b=to+go+2+i*12,t=v.getUint16(b,le);if(t===1)lr=String.fromCharCode(v.getUint8(to+v.getUint32(b+8,le)));if(t===3)lo=String.fromCharCode(v.getUint8(to+v.getUint32(b+8,le)));if(t===2||t===4){const vo=to+v.getUint32(b+8,le);const d=v.getUint32(vo,le)/v.getUint32(vo+4,le);const m=v.getUint32(vo+8,le)/v.getUint32(vo+12,le);const s=v.getUint32(vo+16,le)/v.getUint32(vo+20,le);if(t===2)lat=d+m/60+s/3600;else lng=d+m/60+s/3600;}}if(lat&&lng){resolve({lat:lr==='S'?-lat:lat,lng:lo==='W'?-lng:lng});return;}}}}if(mk===0xFFDA)break;off+=2+v.getUint16(off+2);}}catch(e){}resolve(null);};r.readAsArrayBuffer(file);});}
+function crop360(imgData){return new Promise(resolve=>{const img=new Image();img.onload=()=>{if(img.width/img.height<1.8){resolve(imgData);return;}const c=document.createElement('canvas');const cW=Math.floor(img.width/3),cH=Math.floor(img.height*0.6);c.width=cW;c.height=cH;c.getContext('2d').drawImage(img,Math.floor(img.width/3),Math.floor(img.height*0.2),cW,cH,0,0,cW,cH);resolve(c.toDataURL('image/jpeg',0.85));};img.src=imgData;});}
+
+// ── DROP ZONES ───────────────────────────────────────────────
+['jsonDZ','photoDZ'].forEach(id=>{const el=document.getElementById(id);el.addEventListener('dragover',e=>{e.preventDefault();el.classList.add('over');});el.addEventListener('dragleave',()=>el.classList.remove('over'));el.addEventListener('drop',e=>{e.preventDefault();el.classList.remove('over');if(id==='jsonDZ'){const f=e.dataTransfer.files[0];if(f)loadJSON(f);}else loadPhotos(e.dataTransfer.files);});});
+document.getElementById('jsonInput').addEventListener('change',e=>{const f=e.target.files[0];if(f){loadJSON(f);e.target.value='';}});
+document.getElementById('photoInput').addEventListener('change',e=>{if(e.target.files.length){loadPhotos(e.target.files);e.target.value='';}});
+
+function loadJSON(file){const r=new FileReader();r.onload=ev=>{try{const p=JSON.parse(ev.target.result);const data=Array.isArray(p)?p:(p.points||[]);if(!data.length){alert('No photos found in JSON');return;}data.forEach(pt=>{if(pt.image)addToQueue({imgData:pt.image,lat:pt.lat||25.4358,lng:pt.lng||81.8463,accuracy:pt.accuracy||0,filename:`Photo #${pt.id}`,timestamp:pt.timestamp||new Date().toISOString()});});document.getElementById('statusChip').textContent=`${data.length} photos loaded — ready to audit`;if(queue.length>1)map.fitBounds(queue.map(p=>[p.lat,p.lng]),{padding:[50,50]});}catch(e){alert('JSON error: '+e.message);}};r.readAsText(file);}
+async function loadPhotos(files){const arr=Array.from(files).filter(f=>f.type.startsWith('image/'));if(!arr.length)return;for(const file of arr){const gps=await readEXIF(file);await new Promise(res=>{const r=new FileReader();r.onload=async ev=>{const img=await crop360(ev.target.result);addToQueue({imgData:img,lat:gps?.lat||25.4358,lng:gps?.lng||81.8463,accuracy:gps?5:0,filename:file.name,timestamp:new Date().toISOString(),gpsFromExif:!!gps});res();};r.readAsDataURL(file);});}if(queue.length>1)map.fitBounds(queue.map(p=>[p.lat,p.lng]),{padding:[50,50]});}
+
+function addToQueue({imgData,lat,lng,accuracy,filename,timestamp,gpsFromExif}){
+  const id=queue.length+1;
+  const item={id,imgData,lat,lng,accuracy:accuracy||0,filename:filename||`Photo ${id}`,timestamp:timestamp||new Date().toISOString(),status:'pending',aiData:null,gpsFromExif};
+  queue.push(item);
+  const m=L.marker([lat,lng],{icon:mkIcon(id,'#00d4ff')}).addTo(map);
+  // Fix: use id to lookup from queue at click time — avoids stale closure
+  m.on('click', function(e){
+    L.DomEvent.stopPropagation(e);
+    const found = queue.find(p=>p.id===id);
+    if(found) showPopup(found);
+  });
+  mkrs[id]=m;
+  poly.setLatLngs(queue.map(p=>[p.lat,p.lng]));
+  renderFeed();updateStats();
+  document.getElementById('btnAnalyze').disabled=false;
+  document.getElementById('btnClear').disabled=false;
+  document.getElementById('feedEmpty')?.remove();
+}
+
+function renderFeed(){
+  const feed=document.getElementById('feed');
+  feed.querySelectorAll('.feed-item').forEach(e=>e.remove());
+  queue.forEach(item=>{
+    const el=document.createElement('div');el.className='feed-item';el.id=`fi-${item.id}`;
+    const dc={pending:'s-pending',processing:'s-processing',done:'s-done',error:'s-error'}[item.status]||'s-pending';
+    const risk=item.aiData?.overall_risk;const rc=risk?riskColor(risk):'';
+    const rb=risk?`<span class="risk-badge" style="background:${rc}22;color:${rc};border:1px solid ${rc}44;">${risk}</span>`:'';
+    el.innerHTML=`<img src="${item.imgData}" alt=""/><div class="fi"><div class="fn"><span class="s-dot ${dc}"></span>#${item.id} ${rb}</div><div class="fc">${item.lat.toFixed(4)}, ${item.lng.toFixed(4)}</div></div>`;
+    el.addEventListener('click',()=>{showPopup(item);map.panTo([item.lat,item.lng]);document.querySelectorAll('.feed-item').forEach(e=>e.classList.remove('on'));el.classList.add('on');});
+    feed.appendChild(el);
+  });
+}
+
+function updateStats(){document.getElementById('stTotal').textContent=queue.length;document.getElementById('stDone').textContent=queue.filter(p=>p.status==='done').length;document.getElementById('stDanger').textContent=queue.filter(p=>p.aiData&&['CRITICAL','HIGH'].includes(p.aiData.overall_risk)).length;}
+function updateHeatmap(){if(heatmapEnabled)drawHeatmap();}
+function updateSummary(){
+  const done=queue.filter(p=>p.status==='done'&&p.aiData);if(!done.length)return;
+  const critical=done.filter(p=>p.aiData.overall_risk==='CRITICAL').length;
+  const high=done.filter(p=>p.aiData.overall_risk==='HIGH').length;
+  const safe=done.filter(p=>['LOW','CLEAR'].includes(p.aiData.overall_risk)).length;
+  document.getElementById('sumTotal').textContent=done.length;document.getElementById('sumCritical').textContent=critical;document.getElementById('sumHigh').textContent=high;document.getElementById('sumSafe').textContent=safe;
+  const counts={};done.forEach(p=>p.aiData.findings?.filter(f=>HAZARD_IDS.includes(f.id)&&f.severity!=='NONE').forEach(f=>{counts[f.name]=(counts[f.name]||0)+1;}));
+  const top=Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
+  document.getElementById('sumTopRisk').innerHTML=top?`Most common: <span>${top[0]} (${top[1]} locations)</span>`:'';
+  document.getElementById('summaryCard').classList.add('show');document.getElementById('sumEmpty').style.display='none';
+}
+
+// ── ANALYZE ──────────────────────────────────────────────────
+document.getElementById('btnAnalyze').addEventListener('click',async()=>{
+  if(analyzing)return;
+  const pending=queue.filter(p=>p.status==='pending'||p.status==='error');
+  if(!pending.length){alert('All photos already audited!');return;}
+  analyzing=true;document.getElementById('btnAnalyze').disabled=true;document.getElementById('progWrap').classList.add('show');
+  let done=0;const total=pending.length;
+  for(const item of pending){
+    item.status='processing';renderFeed();
+    document.getElementById('progText').textContent=`Auditing location ${item.id} of ${total}...`;
+    try{const b64=item.imgData.split(',')[1];const data=await callGroq(b64);item.aiData=data;item.status='done';mkrs[item.id]?.setIcon(mkIcon(item.id,riskColor(data.overall_risk)));}catch(e){item.status='error';console.error(e);}
+    done++;document.getElementById('progFill').style.width=`${(done/total)*100}%`;document.getElementById('progText').textContent=`${done} / ${total} audited`;
+    renderFeed();updateStats();updateHeatmap();updateSummary();refreshChokepointMarkers();
+    // 4 sec delay — Gemini free tier = 15 RPM limit
+    if(done<total)await new Promise(r=>setTimeout(r,4000));
+  }
+  analyzing=false;document.getElementById('btnAnalyze').disabled=false;
+  document.getElementById('btnReport').disabled=false;document.getElementById('btnPlayback').disabled=false;
+  if(document.getElementById('tabDash').classList.contains('active')) updateDashboard();
+  document.getElementById('btnExportPDF').disabled=false;document.getElementById('btnExportCSV').disabled=false;
+  const hr=queue.filter(p=>p.aiData&&['CRITICAL','HIGH'].includes(p.aiData.overall_risk)).length;
+  document.getElementById('progText').textContent=`✓ Audit complete — ${done} locations · ${hr} high-risk`;
+  document.getElementById('statusChip').textContent=`${done} audited · ${hr} high-risk locations`;
+});
+
+// ── CLEAR ────────────────────────────────────────────────────
+document.getElementById('btnClear').addEventListener('click',()=>{
+  if(!confirm('Clear all audit data?'))return;
+  stopPlayback();
+  queue.forEach(p=>mkrs[p.id]?.remove());heatCircles.forEach(c=>map.removeLayer(c));
+  queue=[];mkrs={};heatCircles=[];poly.setLatLngs([]);
+  document.getElementById('feed').innerHTML='<div class="feed-empty" id="feedEmpty"><div class="ei">🗺️</div>Import JSON or photos<br>to begin field audit</div>';
+  ['btnAnalyze','btnClear','btnReport','btnPlayback','btnExportPDF','btnExportCSV'].forEach(id=>document.getElementById(id).disabled=true);
+  document.getElementById('progWrap').classList.remove('show');document.getElementById('progFill').style.width='0%';
+  document.getElementById('statusChip').textContent='Import session to begin';document.getElementById('summaryCard').classList.remove('show');document.getElementById('sumEmpty').style.display='';
+  updateStats();
+});
+
+// ══════════════════════════════════════════════════════════════
+// ── TIMELINE PLAYBACK ─────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+document.getElementById('btnPlayback').addEventListener('click', startPlayback);
+
+function startPlayback() {
+  const audited = queue.filter(p=>p.status==='done'&&p.aiData);
+  if(!audited.length){alert('Run audit first!');return;}
+  // Sort by timestamp
+  audited.sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp));
+
+  // Hide all markers, reset
+  queue.forEach(p=>{ mkrs[p.id]?.setOpacity(0); });
+  if(pbPolyline){ map.removeLayer(pbPolyline); pbPolyline=null; }
+  pbPolyline = L.polyline([], {color:'#8b5cf6',weight:3,opacity:0.8}).addTo(map);
+  pbRevealedMkrs={};
+  pbIndex=-1;
+
+  // Reset counters
+  document.getElementById('pbCntDone').textContent='0';
+  document.getElementById('pbCntCrit').textContent='0';
+  document.getElementById('pbCntHigh').textContent='0';
+  document.getElementById('pbCntSafe').textContent='0';
+
+  // Zoom out to show full area
+  if(audited.length>1) map.fitBounds(audited.map(p=>[p.lat,p.lng]),{padding:[80,80]});
+  else map.setView([audited[0].lat,audited[0].lng],16);
+
+  document.getElementById('pbOvl').classList.add('show');
+  map.invalidateSize();
+
+  // Auto start
+  pbPlaying=false;
+  togglePlay();
+}
+
+function stopPlayback() {
+  pbPlaying=false;clearInterval(pbTimer);pbTimer=null;
+  document.getElementById('pbOvl').classList.remove('show');
+  // Restore all markers
+  queue.forEach(p=>{ mkrs[p.id]?.setOpacity(1); });
+  if(pbPolyline){map.removeLayer(pbPolyline);pbPolyline=null;}
+  // Restore poly
+  poly.setLatLngs(queue.map(p=>[p.lat,p.lng]));
+  map.invalidateSize();
+}
+
+function togglePlay(){
+  const audited=queue.filter(p=>p.status==='done'&&p.aiData).sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp));
+  if(pbPlaying){
+    pbPlaying=false;clearInterval(pbTimer);pbTimer=null;
+    document.getElementById('pbBtnPlay').textContent='▶ Play';
+    document.getElementById('pbBtnPlay').classList.remove('active');
+  } else {
+    if(pbIndex>=audited.length-1) pbIndex=-1; // restart
+    pbPlaying=true;
+    document.getElementById('pbBtnPlay').textContent='⏸ Pause';
+    document.getElementById('pbBtnPlay').classList.add('active');
+    pbTimer=setInterval(()=>{
+      if(pbIndex<audited.length-1){
+        pbIndex++;
+        showPbFrame(pbIndex,audited);
+      } else {
+        // Reached end
+        pbPlaying=false;clearInterval(pbTimer);pbTimer=null;
+        document.getElementById('pbBtnPlay').textContent='↺ Replay';
+        document.getElementById('pbBtnPlay').classList.remove('active');
+      }
+    },pbSpeed);
+  }
+}
+
+function pbStep(dir){
+  const audited=queue.filter(p=>p.status==='done'&&p.aiData).sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp));
+  if(pbPlaying){pbPlaying=false;clearInterval(pbTimer);pbTimer=null;document.getElementById('pbBtnPlay').textContent='▶ Play';document.getElementById('pbBtnPlay').classList.remove('active');}
+  const next=Math.max(0,Math.min(audited.length-1,pbIndex+dir));
+  if(next!==pbIndex){pbIndex=next;showPbFrame(pbIndex,audited);}
+}
+
+function scrubTo(e){
+  const audited=queue.filter(p=>p.status==='done'&&p.aiData).sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp));
+  const track=document.getElementById('pbScrubTrack');
+  const rect=track.getBoundingClientRect();
+  const pct=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));
+  const idx=Math.round(pct*(audited.length-1));
+  if(pbPlaying){pbPlaying=false;clearInterval(pbTimer);pbTimer=null;document.getElementById('pbBtnPlay').textContent='▶ Play';document.getElementById('pbBtnPlay').classList.remove('active');}
+  pbIndex=idx;
+  // Reveal all up to idx
+  for(let i=0;i<=idx;i++) revealFrame(i,audited);
+  showPbFrame(idx,audited,true);
+}
+
+function setSpeed(ms){
+  pbSpeed=ms;
+  document.querySelectorAll('.pb-speed-btn').forEach(b=>b.classList.remove('on'));
+  const map_={1500:'spd1',900:'spd2',400:'spd3'}[ms];
+  if(map_)document.getElementById(map_).classList.add('on');
+  if(pbPlaying){clearInterval(pbTimer);pbTimer=setInterval(()=>{const audited=queue.filter(p=>p.status==='done'&&p.aiData).sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp));if(pbIndex<audited.length-1){pbIndex++;showPbFrame(pbIndex,audited);}else{pbPlaying=false;clearInterval(pbTimer);pbTimer=null;document.getElementById('pbBtnPlay').textContent='↺ Replay';document.getElementById('pbBtnPlay').classList.remove('active');}},pbSpeed);}
+}
+
+function revealFrame(i, audited){
+  const item=audited[i];
+  if(!pbRevealedMkrs[item.id]){
+    const c=item.aiData?riskColor(item.aiData.overall_risk):'#00d4ff';
+    mkrs[item.id]?.setIcon(mkIcon(item.id,c));
+    mkrs[item.id]?.setOpacity(1);
+    pbRevealedMkrs[item.id]=true;
+  }
+  pbPolyline.setLatLngs(audited.slice(0,i+1).map(p=>[p.lat,p.lng]));
+}
+
+function showPbFrame(idx, audited, skipReveal=false){
+  const item=audited[idx];
+  if(!skipReveal) revealFrame(idx,audited);
+
+  // Highlight current — big pulsing icon
+  Object.keys(pbRevealedMkrs).forEach(id=>{
+    const it=audited.find(a=>a.id==id);
+    if(it) mkrs[it.id]?.setIcon(mkIcon(it.id, riskColor(it.aiData.overall_risk)));
+  });
+  const c=riskColor(item.aiData.overall_risk);
+  mkrs[item.id]?.setIcon(mkIconLarge(item.id,c));
+
+  // Pan to location
+  map.panTo([item.lat,item.lng],{animate:true,duration:0.6});
+
+  // Update scrubber
+  const pct=(idx/(audited.length-1))*100;
+  document.getElementById('pbScrubFill').style.width=pct+'%';
+  document.getElementById('pbScrubThumb').style.left=pct+'%';
+  document.getElementById('pbScrubCur').textContent=`Location ${idx+1} / ${audited.length}`;
+  document.getElementById('pbScrubTime').textContent=new Date(item.timestamp).toLocaleTimeString();
+
+  // Update live counters
+  const seen=audited.slice(0,idx+1);
+  document.getElementById('pbCntDone').textContent=seen.length;
+  document.getElementById('pbCntCrit').textContent=seen.filter(p=>p.aiData.overall_risk==='CRITICAL').length;
+  document.getElementById('pbCntHigh').textContent=seen.filter(p=>p.aiData.overall_risk==='HIGH').length;
+  document.getElementById('pbCntSafe').textContent=seen.filter(p=>['LOW','CLEAR'].includes(p.aiData.overall_risk)).length;
+
+  // Update evidence strip
+  const hazards=item.aiData.findings.filter(f=>HAZARD_IDS.includes(f.id)&&f.severity!=='NONE').sort((a,b)=>['CRITICAL','HIGH','MEDIUM','LOW'].indexOf(a.severity)-['CRITICAL','HIGH','MEDIUM','LOW'].indexOf(b.severity));
+  const topHaz=hazards.slice(0,3);
+  const ev=document.getElementById('pbEvidence');
+  ev.innerHTML=`
+    <img class="pb-ev-img" src="${item.imgData}" alt=""/>
+    <div class="pb-ev-info">
+      <div class="pb-ev-loc">📍 Photo #${item.id} — ${item.lat.toFixed(4)}, ${item.lng.toFixed(4)}</div>
+      <div class="pb-ev-risk" style="background:${c}22;color:${c};border:1px solid ${c}44;">${item.aiData.overall_risk} RISK</div>
+      <div class="pb-ev-hazards">${topHaz.length?topHaz.map(f=>`${ICONS[f.id]||'⚠'} ${f.name}`).join('  ·  '):'✓ No major hazards'}</div>
+      ${item.aiData.inspector_note?`<div class="pb-ev-note">👮 ${item.aiData.inspector_note}</div>`:''}
+    </div>`;
+
+  // Highlight feed item
+  document.querySelectorAll('.feed-item').forEach(e=>e.classList.remove('on'));
+  document.getElementById(`fi-${item.id}`)?.classList.add('on');
+  document.getElementById(`fi-${item.id}`)?.scrollIntoView({block:'nearest'});
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── POPUP WITH EVIDENCE SUMMARY ───────────────────────────────
+// ══════════════════════════════════════════════════════════════
+function showPopup(item){
+  try {
+  currentPopupItem = item;
+  document.getElementById('popImg').src=item.imgData;
+  drawQuadrantHighlights();
+
+  // Risk chip
+  const chip=document.getElementById('popRiskChip');
+  if(item.aiData?.overall_risk){const c=riskColor(item.aiData.overall_risk);chip.textContent=item.aiData.overall_risk+' RISK';chip.style.cssText=`background:${c}22;color:${c};border:1px solid ${c}55;`;chip.style.display='';}
+  else chip.style.display='none';
+
+  // PHOTO ANNOTATION — show hazard + where in photo
+  const tagsEl=document.getElementById('popPhotoTags');
+  if(tagsEl && item.aiData){
+    const hazards=item.aiData.findings.filter(f=>HAZARD_IDS.includes(f.id)&&['MEDIUM','HIGH','CRITICAL'].includes(f.severity)).sort((a,b)=>['CRITICAL','HIGH','MEDIUM'].indexOf(a.severity)-['CRITICAL','HIGH','MEDIUM'].indexOf(b.severity)).slice(0,4);
+    tagsEl.innerHTML=hazards.map(f=>{
+      const c=riskColor(f.severity);
+      const loc=f.location_in_frame?`<span style="font-weight:400;opacity:0.85;font-size:0.48rem;"> — ${f.location_in_frame}</span>`:'';
+      return`<span class="pop-photo-tag" style="background:${c}dd;color:#fff;max-width:260px;white-space:normal;line-height:1.4;">${ICONS[f.id]||'⚠'} <strong>${f.name}</strong>${loc}</span>`;
+    }).join('');
+  } else if(tagsEl) tagsEl.innerHTML='';
+
+  // EVIDENCE SUMMARY CARD — NEW
+  const evSum=document.getElementById('evSummary');
+  if(item.aiData){
+    const c=riskColor(item.aiData.overall_risk);
+    const hazards=item.aiData.findings.filter(f=>HAZARD_IDS.includes(f.id)&&f.severity!=='NONE').sort((a,b)=>['CRITICAL','HIGH','MEDIUM','LOW'].indexOf(a.severity)-['CRITICAL','HIGH','MEDIUM','LOW'].indexOf(b.severity));
+    document.getElementById('evSumRisk').textContent=item.aiData.overall_risk;
+    document.getElementById('evSumRisk').style.cssText=`background:${c}22;color:${c};border:1px solid ${c}44;`;
+    document.getElementById('evHazardTags').innerHTML=hazards.map(f=>{const sc=SEV_CONFIG[f.severity]||SEV_CONFIG.NONE;return`<span class="ev-tag" style="background:${sc.color}22;color:${sc.color};border:1px solid ${sc.color}44;">${ICONS[f.id]||''} ${f.name} · ${sc.label}</span>`;}).join('');
+
+    // INSPECTOR VERDICT — bold statement
+    let verdict='',vbg='',vc='';
+    if(item.aiData.overall_risk==='CRITICAL'){verdict='🔴 UNSAFE — DO NOT ALLOW PILGRIM MOVEMENT';vbg='rgba(220,38,38,0.12)';vc='#dc2626';}
+    else if(item.aiData.overall_risk==='HIGH'){verdict='🟠 HIGH RISK — IMMEDIATE ATTENTION REQUIRED';vbg='rgba(239,68,68,0.1)';vc='#ef4444';}
+    else if(item.aiData.overall_risk==='MEDIUM'){verdict='🟡 MEDIUM RISK — MONITOR & MAINTAIN';vbg='rgba(245,158,11,0.1)';vc='#f59e0b';}
+    else{verdict='🟢 LOW RISK — SUITABLE FOR PILGRIM MOVEMENT';vbg='rgba(16,185,129,0.1)';vc='#10b981';}
+    document.getElementById('evVerdict').textContent=verdict;
+    document.getElementById('evVerdict').style.cssText=`background:${vbg};color:${vc};border:1px solid ${vc}44;`;
+    evSum.style.display='';
+  } else evSum.style.display='none';
+
+  // Meta
+  document.getElementById('popMeta').innerHTML=
+    `<div class="pop-meta-item">Photo <span>#${item.id}</span></div>
+     <div class="pop-meta-item">Lat <span>${item.lat.toFixed(6)}</span></div>
+     <div class="pop-meta-item">Lng <span>${item.lng.toFixed(6)}</span></div>
+     <div class="pop-meta-item">Accuracy <span>±${item.accuracy}m</span></div>
+     <div class="pop-meta-item">Time <span>${new Date(item.timestamp).toLocaleString()}</span></div>
+     <div class="pop-meta-item">GPS <span>${item.gpsFromExif?'EXIF (Insta 360)':'Live GPS'}</span></div>`;
+
+  // QUANTIFICATION CARD
+  const qc = document.getElementById('quantCard');
+  if(item.aiData?.quantification){
+    const q = item.aiData.quantification;
+    document.getElementById('quantWidth').textContent = q.road_width_meters ? `${q.road_width_meters}m` : '—';
+    document.getElementById('quantArea').textContent = q.area_estimate_sqm ? q.area_estimate_sqm + ' sqm' : '—';
+    document.getElementById('quantPed').textContent = q.pedestrian_count ?? '—';
+    const pedVerifyEl = document.getElementById('quantPedVerify');
+    if(q.pedestrian_count_yolo !== undefined && q.pedestrian_count_yolo !== null){
+      const verified = q.count_verification === 'verified';
+      pedVerifyEl.innerHTML = `<span style="color:${verified?'var(--green)':'var(--amber)'}">${verified?'✓':'⚠'} YOLO: ${q.pedestrian_count_yolo}${verified?' verified':' — discrepancy'}</span>`;
+    } else {
+      pedVerifyEl.textContent = '';
+    }
+    document.getElementById('quantVeh').textContent = q.vehicle_count ?? '0';
+    document.getElementById('quantPot').textContent = q.pothole_count ?? '0';
+    document.getElementById('quantPuddle').textContent = q.puddle_count ? `${q.puddle_count} detected` : '0';
+    document.getElementById('quantInt').textContent = q.intersection_type || '—';
+    const motVal = q.motion_direction;
+    const motIcons = {unidirectional:'→ Uni',bidirectional:'⇄ Bi',stationary:'⏸ Static',mixed:'↕ Mixed'};
+    document.getElementById('quantMotion').textContent = motIcons[motVal] || motVal || '—';
+    document.getElementById('quantZoneSmall').textContent = q.zone_type || '—';
+    document.getElementById('quantZone').textContent = (q.zone_type||'unknown').toUpperCase();
+
+    // Walkability
+    const walkWrap = document.getElementById('quantWalkWrap');
+    if(q.walkability){
+      const walkColors = {yes:'var(--green)',no:'var(--red)',partial:'var(--amber)'};
+      const walkIcons = {yes:'✅',no:'❌',partial:'⚠️'};
+      document.getElementById('quantWalkVal').innerHTML = `<span style="color:${walkColors[q.walkability]||'var(--text)'}">${walkIcons[q.walkability]||'❓'} ${q.walkability.toUpperCase()} — Ideal for pilgrim walking</span>`;
+      document.getElementById('quantWalkReason').textContent = q.walkability_reason || '';
+      walkWrap.style.display='';
+    } else walkWrap.style.display='none';
+
+    // Crowd Flow Capacity (Fruin LOS standard)
+    const flowWrap = document.getElementById('quantFlowWrap');
+    const flow = computeCrowdFlow(q);
+    if(flow){
+      document.getElementById('quantFlowVal').innerHTML = `<span style="color:var(--cyan)">${flow.maxSafeFlow} pilgrims/min</span> max safe flow`;
+      document.getElementById('quantFlowDetail').textContent = `Effective width: ${flow.effectiveWidth}m (basis: ${flow.basis}) · Design rate: ${SAFE_DESIGN_FLOW_RATE} ppl/min/m (Fruin LOS-D)`;
+      if(flow.density!==null){
+        document.getElementById('quantFlowDensity').innerHTML = `Current density: <b style="color:${flow.densityLOS.color}">${flow.density} ppl/m² — LOS ${flow.densityLOS.label}</b>`;
+      } else {
+        document.getElementById('quantFlowDensity').textContent = '';
+      }
+      const flowWarn = document.getElementById('quantFlowWarn');
+      if(flow.footpathUncertain){
+        flowWarn.style.display='';
+        flowWarn.innerHTML = `⚠ AI reported a footpath here, but ${q.vehicle_count} vehicles are visible in this frame — dense parking often hides/encroaches a footpath, so we don't trust that claim alone. Capacity above uses the more conservative road-width estimate. <i>If a real, clear footpath exists, capacity could be up to ${flow.claimedFlow} pilgrims/min — verify on-site.</i>`;
+      } else {
+        flowWarn.style.display='none';
+      }
+      flowWrap.style.display='';
+    } else flowWrap.style.display='none';
+
+    // Footpath
+    const footWrap = document.getElementById('quantFootWrap');
+    if(q.footpath_present && q.footpath_present !== 'no'){
+      const fpColors = {yes:'var(--green)',partial:'var(--amber)'};
+      document.getElementById('quantFootVal').innerHTML = `<span style="color:${fpColors[q.footpath_present]||'var(--text)'}">Present: ${q.footpath_present.toUpperCase()} · Side: ${q.footpath_location||'—'} · Width: ${q.footpath_width_meters||'?'}m</span>`;
+      document.getElementById('quantFootDetail').textContent = `Condition: ${q.footpath_condition||'unknown'}`;
+      document.getElementById('quantFootWarn').style.display = (flow && flow.footpathUncertain) ? '' : 'none';
+      footWrap.style.display='';
+    } else footWrap.style.display='none';
+
+    // Yes/No Quick Checklist
+    const ynWrap = document.getElementById('quantYNWrap');
+    const yns = q.yes_no_summary;
+    if(yns && Object.keys(yns).length){
+      const ynLabels = {waterlogging:'💧 Waterlogging',bottleneck:'⚠️ Bottleneck',crowd_risk:'👥 Crowd Risk',footpath_available:'🛤 Footpath',vehicle_conflict:'🚗 Vehicle Conflict',good_lighting:'💡 Good Lighting',signage_present:'🪧 Signage',obstruction_present:'🚧 Obstruction'};
+      document.getElementById('quantYNGrid').innerHTML = Object.entries(yns).map(([k,v])=>{
+        const isYes = v==='yes'; const isNo = v==='no';
+        const col = isYes ? 'var(--green)' : isNo ? 'var(--red)' : 'var(--text3)';
+        const icon = isYes ? '✅' : isNo ? '❌' : '—';
+        return `<div style="background:var(--panel2);border:1px solid var(--border);border-radius:5px;padding:5px 8px;display:flex;align-items:center;justify-content:space-between;gap:6px;">
+          <span style="font-size:0.62rem;color:var(--text2);">${ynLabels[k]||k}</span>
+          <span style="font-size:0.7rem;font-weight:700;color:${col};">${icon} ${(v||'—').toUpperCase()}</span>
+        </div>`;
+      }).join('');
+      ynWrap.style.display='';
+    } else ynWrap.style.display='none';
+
+    // Occlusions
+    const occWrap = document.getElementById('quantOccWrap');
+    if(q.occlusions && q.occlusions !== 'none' && q.occlusions !== ''){
+      document.getElementById('quantOccVal').textContent = q.occlusions;
+      occWrap.style.display='';
+    } else occWrap.style.display='none';
+
+    // Locality clues
+    const localWrap = document.getElementById('quantLocalWrap');
+    if(q.locality_clues && q.locality_clues !== ''){
+      document.getElementById('quantLocalVal').textContent = q.locality_clues;
+      localWrap.style.display='';
+    } else localWrap.style.display='none';
+
+    // Vehicle types
+    const vt = document.getElementById('quantVehTypes');
+    const vtags = document.getElementById('quantVehTags');
+    if(q.vehicle_types?.length){
+      vtags.innerHTML = q.vehicle_types.map(v=>`<span class="vehicle-tag">🚗 ${v}</span>`).join('');
+      vt.style.display='';
+    } else vt.style.display='none';
+
+    // Signboards
+    const sb = document.getElementById('quantBoards');
+    const stags = document.getElementById('quantBoardTags');
+    if(q.signboards_text?.length){
+      stags.innerHTML = q.signboards_text.map(s=>`<span class="board-tag">📋 "${s}"</span>`).join('');
+      sb.style.display='';
+    } else sb.style.display='none';
+
+    qc.style.display='';
+  } else qc.style.display='none';
+
+  const sceneSec=document.getElementById('sceneSec');
+  if(item.aiData?.scene_summary){document.getElementById('sceneText').textContent=item.aiData.scene_summary;sceneSec.style.display='';}
+  else sceneSec.style.display='none';
+
+  const fc=document.getElementById('findingsContent');const fh=document.getElementById('findingsHeader');
+  if(item.status==='processing'){fh.textContent='FIELD AUDIT FINDINGS';fc.innerHTML=`<div style="text-align:center;padding:24px;color:var(--cyan);">⏳ AI field audit in progress...</div>`;}
+  else if(item.aiData){
+    const findings=item.aiData.findings||[];
+    const hazards=findings.filter(f=>HAZARD_IDS.includes(f.id)&&f.severity!=='NONE');
+    const positives=findings.filter(f=>POSITIVE_IDS.includes(f.id)&&f.severity!=='NONE');
+    const clear=findings.filter(f=>HAZARD_IDS.includes(f.id)&&f.severity==='NONE');
+    fh.textContent=`FIELD AUDIT FINDINGS — ${hazards.length} hazard${hazards.length!==1?'s':''} detected`;
+    let html='';
+    if(hazards.length){html+=`<div style="font-family:'JetBrains Mono',monospace;font-size:0.57rem;color:var(--text3);letter-spacing:0.1em;margin-bottom:6px;">⚠ HAZARDS DETECTED</div>`;html+=hazards.map(f=>findingCard(f)).join('');}
+    if(positives.length){html+=`<div style="font-family:'JetBrains Mono',monospace;font-size:0.57rem;color:var(--green);letter-spacing:0.1em;margin:10px 0 6px;">✓ POSITIVE FEATURES</div>`;html+=positives.map(f=>findingCard(f,true)).join('');}
+    if(clear.length){html+=`<div style="font-family:'JetBrains Mono',monospace;font-size:0.57rem;color:var(--text3);letter-spacing:0.1em;margin:10px 0 6px;">✓ CONDITIONS CLEAR (${clear.length})</div>`;html+=clear.map(f=>`<div class="clear-row"><span class="cr-icon">${ICONS[f.id]||'—'}</span><span class="cr-name">${f.name}</span><span class="cr-badge">NOT DETECTED</span></div>`).join('');}
+    fc.innerHTML=html||`<div style="color:var(--green);text-align:center;padding:16px;font-size:0.75rem;">✓ No hazards detected at this location</div>`;
+  } else if(item.status==='error'){fh.textContent='FIELD AUDIT FINDINGS';fc.innerHTML=`<div style="color:var(--red);text-align:center;padding:16px;font-size:0.75rem;">⚠ Audit failed — check API configuration</div>`;}
+  else{fh.textContent='FIELD AUDIT FINDINGS';fc.innerHTML=`<div style="color:var(--text3);text-align:center;padding:20px;font-size:0.72rem;">Click "Run Field Audit" to analyze this location</div>`;}
+
+  const insSec=document.getElementById('inspectorSec');
+  if(insSec){
+    if(item.aiData?.inspector_note){document.getElementById('inspectorText').textContent=item.aiData.inspector_note;insSec.style.display='';}
+    else insSec.style.display='none';
+  }
+
+  document.getElementById('popOvl').classList.add('show');
+  } catch(err){ 
+    console.error('showPopup error:', err);
+    // Force open popup even if some elements missing
+    document.getElementById('popOvl').classList.add('show');
+  }
+}
+
+let cardCounter=0;
+function findingCard(f,isPositive=false){
+  const sev=SEV_CONFIG[f.severity]||SEV_CONFIG.NONE;
+  const cid=`fc-${++cardCounter}`;
+  const icon=ICONS[f.id]||'⚠️';
+  const locBlock=f.location_in_frame?`<div class="ev-label evidence">📍 WHERE IN PHOTO</div><div class="ev-text" style="color:var(--cyan);font-weight:600;font-size:0.76rem;">${f.location_in_frame}</div>`:'';
+  const objectBlock=f.detected_object?`<div class="ev-label object">🔍 DETECTED OBJECT</div><div class="ev-object-chip">${f.detected_object}</div>`:'';
+  const impactBlock=f.pilgrim_impact?`<div class="ev-label impact">⚠️ PILGRIM IMPACT</div><div class="ev-impact-box">${f.pilgrim_impact}</div>`:'';
+  return`<div class="finding" id="${cid}-wrap">
+    <div class="finding-head" onclick="toggleCard('${cid}')">
+      <div class="finding-sev-bar" style="background:${sev.color}"></div>
+      <span class="finding-icon">${icon}</span>
+      <span class="finding-name">${f.name}</span>
+      <span class="finding-sev" style="background:${sev.color}22;color:${sev.color};">${sev.label}</span>
+      <span class="finding-conf">${f.confidence}%</span>
+      <span class="finding-chevron" id="${cid}-chev">▼</span>
+    </div>
+    <div class="finding-body" id="${cid}">
+      <div class="ev-card">
+        ${locBlock}
+        ${objectBlock}
+        <div class="ev-label evidence">👁 VISUAL EVIDENCE — What AI observed in photo</div>
+        <div class="ev-text">${f.visual_evidence||'No visual evidence provided.'}</div>
+        ${impactBlock}
+        <div class="ev-label reasoning">🧠 INSPECTOR REASONING</div>
+        <div class="ev-text">${f.reasoning||'No reasoning provided.'}</div>
+        <div class="conf-row">
+          <span class="conf-label">AI CONFIDENCE</span>
+          <div class="conf-track"><div class="conf-fill" style="width:${f.confidence}%;background:${sev.color}"></div></div>
+          <span class="conf-val" style="color:${sev.color}">${f.confidence}%</span>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+function toggleCard(id){const body=document.getElementById(id);const chev=document.getElementById(id+'-chev');const open=body.classList.toggle('open');chev.classList.toggle('open',open);}
+function closePopup(){document.getElementById('popOvl').classList.remove('show');}
+document.getElementById('popOvl').addEventListener('click',e=>{if(e.target===e.currentTarget)closePopup();});
+
+// ── ANNOTATION — Pure CSS divs, always inside photo ──────────
+let currentPopupItem = null;
+
+// Quadrant → CSS position (% based)
+const QUAD_CSS = {
+  'top-left':      { top:'0%',    left:'0%',   width:'33.33%', height:'33.33%' },
+  'top-center':    { top:'0%',    left:'33.33%',width:'33.33%', height:'33.33%' },
+  'top-right':     { top:'0%',    left:'66.66%',width:'33.33%', height:'33.33%' },
+  'middle-left':   { top:'33.33%',left:'0%',   width:'33.33%', height:'33.33%' },
+  'middle-center': { top:'33.33%',left:'33.33%',width:'33.33%',height:'33.33%' },
+  'middle-right':  { top:'33.33%',left:'66.66%',width:'33.33%',height:'33.33%' },
+  'bottom-left':   { top:'66.66%',left:'0%',   width:'33.33%', height:'33.33%' },
+  'bottom-center': { top:'66.66%',left:'33.33%',width:'33.33%',height:'33.33%' },
+  'bottom-right':  { top:'66.66%',left:'66.66%',width:'33.33%',height:'33.33%' },
+};
+
+function drawQuadrantHighlights() {
+  const wrap = document.getElementById('popAnnotations');
+  if (!wrap || !currentPopupItem?.aiData) return;
+  wrap.innerHTML = '';
+
+  const allFindings = currentPopupItem.aiData.findings || [];
+  const hazards = allFindings
+    .filter(f => f.severity !== 'NONE'
+              && f.severity !== undefined
+              && (f.bbox_x_pct || (f.quadrant && f.quadrant !== 'not-visible' && QUAD_CSS[f.quadrant])))
+    .sort((a,b) => ['CRITICAL','HIGH','MEDIUM','LOW'].indexOf(a.severity)
+                 - ['CRITICAL','HIGH','MEDIUM','LOW'].indexOf(b.severity));
+
+  // Track label positions to avoid overlap
+  const usedLabelSlots = [];
+
+  hazards.forEach(f => {
+    const c = riskColor(f.severity);
+    const icon = ICONS[f.id] || '⚠';
+
+    const hasPreciseBbox = f.bbox_x_pct && f.bbox_y_pct && f.bbox_w_pct && f.bbox_h_pct
+                        && f.bbox_x_pct > 0 && f.bbox_y_pct > 0;
+
+    let posStyle, boxLeft, boxTop, boxW, boxH;
+    if (hasPreciseBbox) {
+      boxW = Math.min(f.bbox_w_pct, 70);
+      boxH = Math.min(f.bbox_h_pct, 70);
+      boxLeft = Math.max(0, Math.min(f.bbox_x_pct - boxW/2, 100 - boxW));
+      boxTop  = Math.max(0, Math.min(f.bbox_y_pct - boxH/2, 100 - boxH));
+      posStyle = `top:${boxTop}%;left:${boxLeft}%;width:${boxW}%;height:${boxH}%;`;
+    } else {
+      const pos = QUAD_CSS[f.quadrant];
+      if (!pos) return;
+      posStyle = `top:${pos.top};left:${pos.left};width:${pos.width};height:${pos.height};`;
+      boxLeft = parseFloat(pos.left); boxTop = parseFloat(pos.top);
+      boxW = 33.33; boxH = 33.33;
+    }
+
+    // Label position: try top-of-box first, if slot taken shift down by 22px steps
+    const labelBase = boxTop < 50 ? 'top' : 'bottom';
+    let labelOffset = 6;
+    const slotKey = `${Math.round(boxLeft/10)}`; // group by horizontal zone
+    const used = usedLabelSlots.filter(s=>s.key===slotKey);
+    if (used.length > 0) labelOffset += used.length * 22;
+    usedLabelSlots.push({key:slotKey, offset:labelOffset});
+
+    const box = document.createElement('div');
+    box.style.cssText = `position:absolute;${posStyle}box-sizing:border-box;pointer-events:none;`;
+
+    box.innerHTML = `
+      <div style="position:relative;width:100%;height:100%;">
+        <div style="position:absolute;inset:4px;background:${c}18;border-radius:2px;"></div>
+        <div style="position:absolute;top:4px;left:4px;width:16px;height:16px;border-top:2.5px solid ${c};border-left:2.5px solid ${c};border-radius:2px 0 0 0;"></div>
+        <div style="position:absolute;top:4px;right:4px;width:16px;height:16px;border-top:2.5px solid ${c};border-right:2.5px solid ${c};border-radius:0 2px 0 0;"></div>
+        <div style="position:absolute;bottom:4px;left:4px;width:16px;height:16px;border-bottom:2.5px solid ${c};border-left:2.5px solid ${c};border-radius:0 0 0 2px;"></div>
+        <div style="position:absolute;bottom:4px;right:4px;width:16px;height:16px;border-bottom:2.5px solid ${c};border-right:2.5px solid ${c};border-radius:0 0 2px 0;"></div>
+        ${hasPreciseBbox ? `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:7px;height:7px;background:${c};border-radius:50%;box-shadow:0 0 5px ${c};"></div>` : ''}
+        <div style="
+          position:absolute;
+          ${labelBase}:${labelOffset}px;left:4px;
+          background:${c};
+          font-family:'JetBrains Mono',monospace;
+          font-size:9px;font-weight:700;
+          padding:2px 7px;border-radius:3px;
+          color:#fff;white-space:nowrap;
+          box-shadow:0 2px 6px rgba(0,0,0,0.5);
+          letter-spacing:0.02em;z-index:5;
+        ">${icon} ${f.name}</div>
+      </div>
+    `;
+    wrap.appendChild(box);
+  });
+}
+
+// ── REPORT ───────────────────────────────────────────────────
+function buildReportData(){const done=queue.filter(p=>p.status==='done'&&p.aiData);const critical=done.filter(p=>p.aiData.overall_risk==='CRITICAL').length;const high=done.filter(p=>p.aiData.overall_risk==='HIGH').length;const medium=done.filter(p=>p.aiData.overall_risk==='MEDIUM').length;const low=done.filter(p=>['LOW','CLEAR'].includes(p.aiData.overall_risk)).length;const counts={};done.forEach(p=>p.aiData.findings?.filter(f=>HAZARD_IDS.includes(f.id)&&f.severity!=='NONE').forEach(f=>{counts[f.name]=(counts[f.name]||0)+1;}));const topFeats=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,8);return{done,critical,high,medium,low,topFeats,total:done.length};}
+
+document.getElementById('btnReport').addEventListener('click',()=>{
+  const{done,critical,high,medium,low,topFeats,total}=buildReportData();if(!total)return;
+  const cPct=Math.round(critical/total*100),hPct=Math.round(high/total*100),mPct=Math.round(medium/total*100),sPct=100-cPct-hPct-mPct;
+  document.getElementById('rSub').textContent=`Generated ${new Date().toLocaleString()} · ${total} locations audited by AI`;
+  document.getElementById('reportContent').innerHTML=`<div class="r-section"><div class="r-section-title">Risk Distribution</div><div class="r-kpi-grid"><div class="r-kpi"><div class="rv" style="color:#dc2626">${critical}</div><div class="rl">Critical</div></div><div class="r-kpi"><div class="rv" style="color:#ef4444">${high}</div><div class="rl">High Risk</div></div><div class="r-kpi"><div class="rv" style="color:#f59e0b">${medium}</div><div class="rl">Medium Risk</div></div><div class="r-kpi"><div class="rv" style="color:#10b981">${low}</div><div class="rl">Low / Clear</div></div><div class="r-kpi"><div class="rv" style="color:var(--cyan)">${total}</div><div class="rl">Total Audited</div></div></div><div class="r-risk-bar"><div class="r-risk-seg" style="width:${cPct}%;background:#dc2626;"></div><div class="r-risk-seg" style="width:${hPct}%;background:#ef4444;"></div><div class="r-risk-seg" style="width:${mPct}%;background:#f59e0b;"></div><div class="r-risk-seg" style="width:${sPct}%;background:#10b981;"></div></div><div class="r-risk-labels"><span style="color:#dc2626">Critical ${cPct}%</span><span style="color:#ef4444">High ${hPct}%</span><span style="color:#f59e0b">Medium ${mPct}%</span><span style="color:#10b981">Low ${sPct}%</span></div></div><div class="r-section"><div class="r-section-title">Most Frequently Detected Hazards</div><div class="r-feat-list">${topFeats.map(([name,count])=>`<div class="r-feat-row"><div class="r-feat-name"><span>${name}</span></div><div class="r-feat-count">${count}/${total} locations</div></div>`).join('')}</div></div><div class="r-section"><div class="r-section-title">Methodology</div><div class="r-rec">Each location was photographed in the field and analyzed by Groq AI (Llama 4 Scout Vision model). For every hazard the AI provides: exact visual evidence from the photo, severity level (CRITICAL/HIGH/MEDIUM/LOW/NONE), confidence percentage, and reasoning specific to Kumbh Mela pilgrim safety. All findings are traceable to source photographs with GPS coordinates and timestamps.</div></div><div class="r-section"><div class="r-section-title">Authority Recommendations</div><div class="r-rec">${critical>0?`<div style="color:#dc2626;margin-bottom:6px;">🔴 ${critical} CRITICAL — Immediate action. These paths must not be used by pilgrims until hazards are resolved.</div>`:''} ${high>0?`<div style="color:#ef4444;margin-bottom:6px;">🟠 ${high} HIGH RISK — Urgent attention needed before high-footfall days.</div>`:''} ${medium>0?`<div style="color:#f59e0b;margin-bottom:6px;">🟡 ${medium} MEDIUM — Monitor and schedule maintenance.</div>`:''} ${low>0?`<div style="color:#10b981;margin-bottom:6px;">🟢 ${low} LOW RISK — Suitable for pilgrim movement.</div>`:''}</div></div>`;
+  document.getElementById('reportOvl').classList.add('show');
+});
+
+function exportCSV(){const done=queue.filter(p=>p.status==='done'&&p.aiData);if(!done.length){alert('Run audit first!');return;}const headers=['Photo ID','Latitude','Longitude','Accuracy (m)','Timestamp','GPS Source','Overall Risk',...HAZARD_IDS.map(id=>FEATURE_NAMES[id]+' Severity'),...HAZARD_IDS.map(id=>FEATURE_NAMES[id]+' Confidence'),...HAZARD_IDS.map(id=>FEATURE_NAMES[id]+' Visual Evidence'),'Scene Summary','Inspector Note'];const rows=done.map(item=>{const f={};item.aiData.findings?.forEach(fi=>{f[fi.id]=fi;});return[item.id,item.lat.toFixed(7),item.lng.toFixed(7),item.accuracy,new Date(item.timestamp).toISOString(),item.gpsFromExif?'EXIF':'Live GPS',item.aiData.overall_risk,...HAZARD_IDS.map(id=>f[id]?.severity||'NONE'),...HAZARD_IDS.map(id=>f[id]?.confidence||0),...HAZARD_IDS.map(id=>`"${(f[id]?.visual_evidence||'').replace(/"/g,'""')}"`),`"${(item.aiData.scene_summary||'').replace(/"/g,'""')}"`,`"${(item.aiData.inspector_note||'').replace(/"/g,'""')}"`];});const csv=[headers.join(','),...rows.map(r=>r.join(','))].join('\n');const blob=new Blob([csv],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`kumbh-audit-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);}
+
+// ── PDF EXPORT — with photos + evidence ──────────────────────
+// ── DASHBOARD ────────────────────────────────────────────────
+function switchView(view){
+  const mapEl = document.getElementById('map');
+  const dashEl = document.getElementById('dashboardView');
+  const tabMap = document.getElementById('tabMap');
+  const tabDash = document.getElementById('tabDash');
+  if(view==='dashboard'){
+    mapEl.classList.add('hidden-view');
+    dashEl.classList.add('active');
+    tabMap.classList.remove('active');
+    tabDash.classList.add('active');
+    updateDashboard();
+  } else {
+    mapEl.classList.remove('hidden-view');
+    dashEl.classList.remove('active');
+    tabMap.classList.add('active');
+    tabDash.classList.remove('active');
+    setTimeout(()=>map.invalidateSize(),100);
+  }
+}
+
+function updateDashboard(){
+  const done = queue.filter(p=>p.status==='done'&&p.aiData);
+  const dbEmpty = document.getElementById('dbEmpty');
+  if(!done.length){ dbEmpty.style.display=''; return; }
+  dbEmpty.style.display='none';
+
+  const YN_KEYS = ['waterlogging','bottleneck','crowd_risk','footpath_available','vehicle_conflict','good_lighting','signage_present','obstruction_present'];
+  const YN_LABELS = {waterlogging:'💧 Water',bottleneck:'⚠️ Bottleneck',crowd_risk:'👥 Crowd',footpath_available:'🛤 Footpath',vehicle_conflict:'🚗 Vehicles',good_lighting:'💡 Lighting',signage_present:'🪧 Signage',obstruction_present:'🚧 Obstructions'};
+
+  // ── STAT CARDS ──
+  const walkable = done.filter(p=>p.aiData.quantification?.walkability==='yes').length;
+  const notWalkable = done.filter(p=>p.aiData.quantification?.walkability==='no').length;
+  const hasFootpath = done.filter(p=>p.aiData.quantification?.footpath_present==='yes'||p.aiData.quantification?.footpath_present==='partial').length;
+  const obstructed = done.filter(p=>{const yns=p.aiData.quantification?.yes_no_summary;return yns?.obstruction_present==='yes';}).length;
+  const critical = done.filter(p=>p.aiData.overall_risk==='CRITICAL').length;
+  const high = done.filter(p=>p.aiData.overall_risk==='HIGH').length;
+  const medium = done.filter(p=>p.aiData.overall_risk==='MEDIUM').length;
+  const safe = done.filter(p=>['LOW','CLEAR'].includes(p.aiData.overall_risk)).length;
+  const bidirectional = done.filter(p=>p.aiData.quantification?.motion_direction==='bidirectional').length;
+
+  document.getElementById('dbStatGrid').innerHTML = `
+    <div class="db-stat"><div class="dsv" style="color:#10b981">${walkable}</div><div class="dsl">Walkable</div></div>
+    <div class="db-stat"><div class="dsv" style="color:#ef4444">${notWalkable}</div><div class="dsl">Not Walkable</div></div>
+    <div class="db-stat"><div class="dsv" style="color:#00d4ff">${hasFootpath}</div><div class="dsl">Has Footpath</div></div>
+    <div class="db-stat"><div class="dsv" style="color:#f59e0b">${obstructed}</div><div class="dsl">Obstructed</div></div>
+    <div class="db-stat"><div class="dsv" style="color:#8b5cf6">${bidirectional}</div><div class="dsl">Bidirectional</div></div>
+    <div class="db-stat"><div class="dsv" style="color:#dc2626">${critical+high}</div><div class="dsl">High+ Risk</div></div>
+    <div class="db-stat"><div class="dsv" style="color:#f59e0b">${medium}</div><div class="dsl">Medium Risk</div></div>
+    <div class="db-stat"><div class="dsv" style="color:#10b981">${safe}</div><div class="dsl">Low/Clear</div></div>
+    <div class="db-stat"><div class="dsv" style="color:#00d4ff">${done.length}</div><div class="dsl">Total Audited</div></div>`;
+  document.getElementById('dbStats').style.display='';
+
+  // ── YES/NO TABLE ──
+  const thead = `<thead><tr><th class="loc-th">Location</th><th class="loc-th">Risk</th>${YN_KEYS.map(k=>`<th>${YN_LABELS[k]}</th>`).join('')}<th>Walkable</th><th>Motion</th></tr></thead>`;
+  const tbody = done.map(p=>{
+    const q = p.aiData.quantification || {};
+    const yns = q.yes_no_summary || {};
+    const risk = p.aiData.overall_risk || 'CLEAR';
+    const rc = riskColor(risk);
+    const ynCells = YN_KEYS.map(k=>{
+      const v = yns[k];
+      if(!v) return '<td class="yn-na">—</td>';
+      return v==='yes' ? `<td class="yn-yes">✅</td>` : `<td class="yn-no">❌</td>`;
+    }).join('');
+    const walkV = q.walkability;
+    const walkCell = walkV==='yes'?'<td class="yn-yes">✅ Yes</td>':walkV==='no'?'<td class="yn-no">❌ No</td>':walkV==='partial'?'<td style="color:#f59e0b">⚠️ Partial</td>':'<td class="yn-na">—</td>';
+    const motionCell = `<td style="font-size:0.6rem;color:var(--text2)">${q.motion_direction||'—'}</td>`;
+    return `<tr>
+      <td class="loc-td">#${p.id} · ${p.lat.toFixed(4)},${p.lng.toFixed(4)}</td>
+      <td><span style="color:${rc};font-weight:700;font-size:0.6rem;">${risk}</span></td>
+      ${ynCells}${walkCell}${motionCell}
+    </tr>`;
+  }).join('');
+  document.getElementById('dbYNTable').innerHTML = thead + `<tbody>${tbody}</tbody>`;
+  document.getElementById('dbYNSection').style.display='';
+
+  // ── CHOKEPOINTS / BOTTLENECKS ──
+  const chokepoints = refreshChokepointMarkers().sort((a,b)=>a.flow.maxSafeFlow-b.flow.maxSafeFlow);
+  const chokeSection = document.getElementById('dbChokeSection');
+  if(chokepoints.length){
+    document.getElementById('dbChokeList').innerHTML = chokepoints.map(c=>{
+      const item = queue.find(p=>p.id===c.id);
+      const congested = c.flow.densityLOS && (c.flow.densityLOS.label.startsWith('E')||c.flow.densityLOS.label.startsWith('F'));
+      return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--panel2);border:1px solid var(--border);border-left:3px solid #f59e0b;border-radius:6px;padding:8px 12px;margin-bottom:6px;cursor:pointer;" onclick="showPopup(queue.find(p=>p.id===${c.id}));document.getElementById('tabMap').click();">
+        <div>
+          <span style="font-weight:700;font-size:0.72rem;">⚠ #${c.id}</span>
+          <span style="font-size:0.62rem;color:var(--text3);margin-left:6px;">${item?item.lat.toFixed(4)+', '+item.lng.toFixed(4):''}</span>
+          ${congested?`<span style="font-size:0.58rem;color:#dc2626;margin-left:8px;">LIVE: ${c.flow.densityLOS.label}</span>`:''}
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:#f59e0b;font-weight:700;">${c.flow.maxSafeFlow} ppl/min cap · ${c.flow.effectiveWidth}m wide</div>
+      </div>`;
+    }).join('');
+    chokeSection.style.display='';
+  } else {
+    document.getElementById('dbChokeList').innerHTML = `<div style="color:var(--text3);font-size:0.65rem;">No significant chokepoints detected — capacity is fairly even across audited locations.</div>`;
+    chokeSection.style.display='';
+  }
+
+  // ── SNAPSHOTS ──
+  document.getElementById('dbSnapGrid').innerHTML = done.map(p=>{
+    const q = p.aiData.quantification || {};
+    const yns = q.yes_no_summary || {};
+    const risk = p.aiData.overall_risk || 'CLEAR';
+    const rc = riskColor(risk);
+    const hazards = p.aiData.findings?.filter(f=>HAZARD_IDS.includes(f.id)&&f.severity!=='NONE')||[];
+    const ynChips = Object.entries(yns).slice(0,6).map(([k,v])=>{
+      const lab = {waterlogging:'Water',bottleneck:'Bottleneck',crowd_risk:'Crowd',footpath_available:'Footpath',vehicle_conflict:'Traffic',good_lighting:'Lighting',signage_present:'Signs',obstruction_present:'Obstruction'}[k]||k;
+      return `<span class="snap-yn-chip ${v}">${v==='yes'?'✅':v==='no'?'❌':'—'} ${lab}</span>`;
+    }).join('');
+    const walkBadge = q.walkability ? `<span style="font-size:0.55rem;padding:2px 6px;border-radius:4px;background:${q.walkability==='yes'?'rgba(16,185,129,0.15)':q.walkability==='no'?'rgba(239,68,68,0.15)':'rgba(245,158,11,0.15)'};color:${q.walkability==='yes'?'#10b981':q.walkability==='no'?'#ef4444':'#f59e0b'};border:1px solid currentColor;font-weight:700;">🚶 ${q.walkability.toUpperCase()}</span>` : '';
+    return `<div class="snap-card" onclick="showPopup(queue.find(x=>x.id===${p.id}))">
+      <img class="snap-img" src="${p.imgData}" alt="#${p.id}"/>
+      <div class="snap-body">
+        <div class="snap-top">
+          <span class="snap-loc">#${p.id} · ${q.zone_type||'unknown'}</span>
+          <span class="snap-risk" style="background:${rc}22;color:${rc};">${risk}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">
+          ${walkBadge}
+          <span style="font-size:0.55rem;color:var(--text3);">${q.motion_direction||''}</span>
+          ${hazards.length?`<span style="font-size:0.55rem;color:var(--red);">⚠️ ${hazards.length} hazard${hazards.length>1?'s':''}</span>`:'<span style="font-size:0.55rem;color:#10b981;">✓ Clear</span>'}
+        </div>
+        <div class="snap-yn">${ynChips}</div>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('dbSnapSection').style.display='';
+}
+
+function exportPDF(){
+  const done=queue.filter(p=>p.status==='done'&&p.aiData);
+  if(!done.length){alert('Run audit first!');return;}
+  const{critical,high,medium,low,topFeats,total}=buildReportData();
+  const dateStr=new Date().toLocaleString();
+
+  // Per-location detailed cards with photo + evidence
+  const locationCardsHTML = done.map(item=>{
+    const rc = riskColor(item.aiData.overall_risk);
+    const hazards = item.aiData.findings.filter(f=>HAZARD_IDS.includes(f.id)&&f.severity!=='NONE');
+    const q = item.aiData.quantification;
+    const ynS = q?.yes_no_summary || {};
+    const ynHtml = Object.keys(ynS).length ? '<div class="yn-row">' + Object.entries(ynS).map(([k,v])=>{
+      const col = v==='yes'?'#059669':v==='no'?'#dc2626':'#888';
+      const icon = v==='yes'?'✅':v==='no'?'❌':'—';
+      const labMap = {waterlogging:'Waterlogging',bottleneck:'Bottleneck',crowd_risk:'Crowd Risk',footpath_available:'Footpath',vehicle_conflict:'Vehicle Conflict',good_lighting:'Lighting OK',signage_present:'Signage',obstruction_present:'Obstruction'};
+      return '<span class="yn-chip" style="color:'+col+'">'+icon+' '+(labMap[k]||k)+'</span>';
+    }).join('') + '</div>' : '';
+    const quantHTML = q ? `
+      <div class="quant-row">
+        <span class="qt"><b>Road Width:</b> ${q.road_width_meters?q.road_width_meters+'m':'—'}</span>
+        <span class="qt"><b>Area Est.:</b> ${q.area_estimate_sqm?q.area_estimate_sqm+' sqm':'—'}</span>
+        <span class="qt"><b>Pedestrians:</b> ${q.pedestrian_count??'—'}</span>
+        <span class="qt"><b>Vehicles:</b> ${q.vehicle_count??0}</span>
+        <span class="qt"><b>Potholes:</b> ${q.pothole_count??0}</span>
+        <span class="qt"><b>Puddles:</b> ${q.puddle_count??0}</span>
+        <span class="qt"><b>Zone:</b> ${q.zone_type||'—'}</span>
+        <span class="qt"><b>Intersection:</b> ${q.intersection_type||'—'}</span>
+        <span class="qt"><b>Motion:</b> ${q.motion_direction||'—'}</span>
+        ${q.walkability?`<span class="qt"><b>Walkable:</b> ${q.walkability.toUpperCase()}${q.walkability_reason?' — '+q.walkability_reason:''}</span>`:''}
+        ${q.footpath_present&&q.footpath_present!=='no'?`<span class="qt"><b>Footpath:</b> ${q.footpath_present} · ${q.footpath_location||'?'} side · W:${q.footpath_width_meters||'?'} · ${q.footpath_condition||'?'}</span>`:''}
+        ${q.vehicle_types?.length?`<span class="qt"><b>Vehicles:</b> ${q.vehicle_types.join(', ')}</span>`:''}
+        ${q.signboards_text?.length?`<span class="qt"><b>Signboards:</b> "${q.signboards_text.join('", "')}"</span>`:''}
+        ${q.locality_clues?`<span class="qt"><b>Locality:</b> ${q.locality_clues}</span>`:''}
+        ${q.occlusions&&q.occlusions!=='none'&&q.occlusions!==''?`<span class="qt"><b>Obstructions:</b> ${q.occlusions}</span>`:''}
+      </div>
+      ` + ynHtml + `` : '';
+    const hazardRowsHTML = hazards.map(f=>`
+      <tr>
+        <td style="font-weight:600;">${f.name}</td>
+        <td style="color:${riskColor(f.severity)};font-weight:700;">${f.severity}</td>
+        <td>${f.confidence}%</td>
+        <td style="font-size:10px;color:#444;">${f.detected_object||f.location_in_frame||'—'}</td>
+        <td style="font-size:10px;">${f.visual_evidence||'—'}</td>
+        <td style="font-size:10px;color:#c0392b;font-weight:500;">${f.pilgrim_impact||'—'}</td>
+        <td style="font-size:10px;color:#555;">${f.reasoning||'—'}</td>
+      </tr>`).join('');
+    return `
+      <div class="loc-card">
+        <div class="loc-head" style="border-left:4px solid ${rc};">
+          <div class="loc-num">Location #${item.id}</div>
+          <div class="loc-risk" style="color:${rc};">${item.aiData.overall_risk} RISK</div>
+          <div class="loc-meta">${item.lat.toFixed(5)}, ${item.lng.toFixed(5)} &nbsp;|&nbsp; ${new Date(item.timestamp).toLocaleString()} &nbsp;|&nbsp; GPS: ${item.gpsFromExif?'EXIF':'Live'}</div>
+        </div>
+        <div class="loc-body">
+          <img src="${item.imgData}" class="loc-img" alt="Field photo #${item.id}"/>
+          <div class="loc-right">
+            ${quantHTML}
+            <div class="scene-box">${item.aiData.scene_summary||'—'}</div>
+            <div class="inspector-box">👮 ${item.aiData.inspector_note||'—'}</div>
+            ${hazards.length ? `
+            <table class="ev-table">
+              <thead><tr><th>Hazard</th><th>Severity</th><th>Conf.</th><th>Detected Object</th><th>Visual Evidence</th><th>Pilgrim Impact</th><th>Reasoning</th></tr></thead>
+              <tbody>${hazardRowsHTML}</tbody>
+            </table>` : '<div class="safe-box">✓ No hazards detected — location suitable for pilgrim movement</div>'}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  const featRowsHTML=topFeats.map(([name,count])=>`<tr><td>${name}</td><td>${count}</td><td>${total}</td><td>${Math.round(count/total*100)}%</td></tr>`).join('');
+
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+  <title>Kumbh Path Audit Report</title>
+  <style>
+    body{font-family:Arial,sans-serif;color:#111;margin:0;padding:0;font-size:11px;}
+    .page{padding:28px;max-width:960px;margin:0 auto;}
+    h1{font-size:18px;color:#0077cc;margin-bottom:2px;}
+    .sub{font-size:10px;color:#666;margin-bottom:20px;}
+    h2{font-size:12px;color:#333;text-transform:uppercase;letter-spacing:0.08em;border-bottom:2px solid #e0e0e0;padding-bottom:4px;margin:20px 0 10px;}
+    .kpi-row{display:flex;gap:10px;margin-bottom:14px;}
+    .kpi{flex:1;border:1px solid #e0e0e0;border-radius:6px;padding:8px;text-align:center;}
+    .kpi .v{font-size:20px;font-weight:700;}
+    .kpi .l{font-size:9px;color:#888;text-transform:uppercase;}
+    /* LOCATION CARDS */
+    .loc-card{border:1px solid #ddd;border-radius:6px;margin-bottom:20px;overflow:hidden;page-break-inside:avoid;}
+    .loc-head{padding:8px 12px;background:#f8f8f8;border-bottom:1px solid #eee;}
+    .loc-num{font-size:13px;font-weight:700;color:#222;}
+    .loc-risk{font-size:12px;font-weight:700;margin-top:2px;}
+    .loc-meta{font-size:9px;color:#666;margin-top:2px;}
+    .loc-body{display:flex;gap:12px;padding:10px;}
+    .loc-img{width:200px;height:150px;object-fit:cover;border-radius:4px;flex-shrink:0;border:1px solid #eee;}
+    .loc-right{flex:1;min-width:0;}
+    .scene-box{background:#f0f7ff;border:1px solid #c8dff0;border-radius:4px;padding:6px 8px;font-size:10px;color:#333;margin-bottom:6px;}
+    .inspector-box{background:#f5f0ff;border:1px solid #d4c5f5;border-radius:4px;padding:6px 8px;font-size:10px;color:#333;margin-bottom:6px;}
+    .safe-box{background:#f0fff4;border:1px solid #a7f3c6;border-radius:4px;padding:6px 8px;font-size:10px;color:#065f46;}
+    .quant-row{display:flex;flex-wrap:wrap;gap:6px;background:#f8f0ff;border:1px solid #ddd;border-radius:4px;padding:6px 8px;margin-bottom:6px;}
+    .qt{font-size:9.5px;color:#333;background:#fff;border:1px solid #e0e0e0;border-radius:3px;padding:2px 6px;}
+    .ev-table{width:100%;border-collapse:collapse;font-size:9px;}
+    .ev-table th{background:#f4f4f4;padding:4px 5px;text-align:left;border:1px solid #ddd;font-size:8.5px;}
+    .ev-table td{padding:4px 5px;border:1px solid #eee;vertical-align:top;}
+    .ev-table tr:nth-child(even){background:#fafafa;}
+    .yn-row{display:flex;flex-wrap:wrap;gap:5px;margin:4px 0 6px;}
+    .yn-chip{font-size:9px;border:1px solid #ddd;border-radius:4px;padding:2px 7px;background:#fafafa;font-weight:600;}
+    /* SUMMARY */
+    table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:14px;}
+    th{background:#f4f4f4;padding:5px 7px;text-align:left;border:1px solid #ddd;}
+    td{padding:4px 7px;border:1px solid #eee;}
+    tr:nth-child(even){background:#fafafa;}
+    .footer{margin-top:28px;font-size:9px;color:#999;border-top:1px solid #eee;padding-top:6px;}
+    @media print{@page{margin:12mm;size:A4;}.loc-card{page-break-inside:avoid;}}
+  </style></head>
+  <body><div class="page">
+    <h1>Kumbh Path — Field Safety Audit Report</h1>
+    <div class="sub">Generated: ${dateStr} &nbsp;|&nbsp; ${total} locations audited by Groq AI (Llama 4 Scout Vision) &nbsp;|&nbsp; All findings backed by direct photographic evidence</div>
+    <h2>Risk Summary</h2>
+    <div class="kpi-row">
+      <div class="kpi"><div class="v" style="color:#dc2626">${critical}</div><div class="l">Critical</div></div>
+      <div class="kpi"><div class="v" style="color:#ef4444">${high}</div><div class="l">High Risk</div></div>
+      <div class="kpi"><div class="v" style="color:#f59e0b">${medium}</div><div class="l">Medium</div></div>
+      <div class="kpi"><div class="v" style="color:#059669">${low}</div><div class="l">Low / Clear</div></div>
+      <div class="kpi"><div class="v" style="color:#0077cc">${total}</div><div class="l">Total Audited</div></div>
+    </div>
+    <h2>Most Frequent Hazards</h2>
+    <table><thead><tr><th>Hazard</th><th>Detections</th><th>Total Locations</th><th>Prevalence</th></tr></thead>
+    <tbody>${featRowsHTML}</tbody></table>
+    <h2>Detailed Location-by-Location Evidence</h2>
+    ${locationCardsHTML}
+    <div class="footer">Kumbh Path Mapper &nbsp;|&nbsp; AI-powered field safety audit &nbsp;|&nbsp; Each finding is based on direct visual evidence from field photographs captured with GPS coordinates and timestamps &nbsp;|&nbsp; Model: Groq Llama 4 Scout Vision</div>
+  </div></body></html>`;
+
+  const win=window.open('','_blank');
+  if(!win){alert('Allow popups to export PDF');return;}
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(()=>{win.print();},800);
+}
+
+document.getElementById('btnExportCSV').addEventListener('click',exportCSV);
+document.getElementById('btnExportPDF').addEventListener('click',exportPDF);
+document.getElementById('rBtnCSV').addEventListener('click',exportCSV);
+document.getElementById('rBtnPDF').addEventListener('click',exportPDF);
+</script>
+</body>
+</html>

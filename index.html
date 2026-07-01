@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Kumbh Path Mapper</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root{
+      --bg:#111318;
+      --panel:#1a1d24;
+      --panel2:#20242e;
+      --border:#2a2f3d;
+      --border2:#333849;
+      --cyan:#00d4ff;
+      --cyan-dim:rgba(0,212,255,0.12);
+      --cyan-glow:rgba(0,212,255,0.25);
+      --purple:#8b5cf6;
+      --green:#10b981;
+      --red:#ef4444;
+      --amber:#f59e0b;
+      --text:#f1f5f9;
+      --text2:#94a3b8;
+      --text3:#4b5563;
+    }
+    body.light{
+      --bg:#f0f2f7;--panel:#ffffff;--panel2:#f4f6fa;
+      --border:#e2e6ed;--border2:#ced4e0;
+      --cyan:#0077cc;--cyan-dim:rgba(0,119,204,0.08);
+      --cyan-glow:rgba(0,119,204,0.2);
+      --purple:#6d41c9;--green:#059669;--red:#dc2626;
+      --amber:#d97706;
+      --text:#0f172a;--text2:#475569;--text3:#94a3b8;
+    }
+    body.light .brand-dot{box-shadow:none;}
+    body.light .btn-go{color:#fff;}
+
+    .tog-wrap{display:flex;align-items:center;gap:5px;}
+    .tog-lbl{font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--text3);white-space:nowrap;}
+    .tog{position:relative;width:34px;height:19px;cursor:pointer;flex-shrink:0;}
+    .tog input{opacity:0;width:0;height:0;position:absolute;}
+    .tog-bar{position:absolute;inset:0;background:var(--border2);border-radius:10px;transition:background 0.2s;}
+    .tog-bar::before{content:'';position:absolute;width:13px;height:13px;left:3px;top:3px;background:var(--text3);border-radius:50%;transition:all 0.2s;}
+    .tog input:checked ~ .tog-bar{background:var(--cyan);}
+    .tog input:checked ~ .tog-bar::before{transform:translateX(15px);background:#fff;}
+
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;transition:background 0.2s,color 0.2s;}
+
+    header{
+      height:48px;padding:0 16px;
+      background:var(--panel);
+      border-bottom:1px solid var(--border);
+      display:flex;align-items:center;justify-content:space-between;
+      flex-shrink:0;z-index:500;
+    }
+    .brand{display:flex;align-items:center;gap:8px;}
+    .brand-dot{width:8px;height:8px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan);}
+    .brand-name{font-size:0.82rem;font-weight:600;letter-spacing:0.05em;color:var(--text);}
+    .header-chips{display:flex;align-items:center;gap:8px;}
+    .chip{display:flex;align-items:center;gap:5px;background:var(--panel2);border:1px solid var(--border2);border-radius:6px;padding:4px 10px;font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--text2);}
+    .chip-dot{width:5px;height:5px;border-radius:50%;background:var(--text3);}
+    .chip-dot.on{background:var(--green);box-shadow:0 0 5px var(--green);animation:blink 2s infinite;}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:0.4}}
+    .nav-btn{font-size:0.72rem;font-weight:500;color:var(--text2);background:var(--panel2);border:1px solid var(--border2);padding:5px 12px;border-radius:6px;text-decoration:none;transition:all 0.15s;cursor:pointer;display:flex;align-items:center;gap:5px;}
+    .nav-btn:hover,.nav-btn.primary{color:var(--cyan);border-color:rgba(0,212,255,0.4);background:var(--cyan-dim);}
+    .nav-btn.primary{font-weight:600;}
+
+    .workspace{display:flex;flex:1;overflow:hidden;}
+    #map{flex:1;z-index:0;}
+
+    /* ── PANEL — FIX: overflow-y:auto so panel itself scrolls ── */
+    .panel{
+      width:240px;
+      background:var(--panel);
+      border-right:1px solid var(--border);
+      display:flex;flex-direction:column;
+      flex-shrink:0;
+      z-index:100;
+      overflow-y:auto;   /* FIX: was overflow:hidden — panel now scrollable */
+      overflow-x:hidden;
+    }
+    .panel::-webkit-scrollbar{width:2px;}
+    .panel::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+
+    .panel-top{padding:12px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .panel-heading{font-size:0.7rem;font-weight:600;color:var(--text);letter-spacing:0.04em;display:flex;align-items:center;justify-content:space-between;}
+    .badge{font-family:'JetBrains Mono',monospace;font-size:0.55rem;background:var(--cyan-dim);color:var(--cyan);border:1px solid rgba(0,212,255,0.25);padding:2px 7px;border-radius:10px;}
+    .block{padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .lbl{font-family:'JetBrains Mono',monospace;font-size:0.57rem;color:var(--text3);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:7px;}
+
+    .gps-row{display:flex;align-items:center;gap:6px;margin-bottom:7px;}
+    .g-dot{width:6px;height:6px;border-radius:50%;background:var(--text3);flex-shrink:0;}
+    .g-dot.active{background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2s infinite;}
+    .g-dot.error{background:var(--red);}
+    .g-dot.warn{background:var(--amber);}
+    .gps-label{font-size:0.68rem;color:var(--text2);}
+    .coord-pair{display:grid;grid-template-columns:1fr 1fr;gap:4px;}
+    .c-box{background:var(--panel2);border:1px solid var(--border);border-radius:5px;padding:5px 7px;}
+    .c-box .ck{font-family:'JetBrains Mono',monospace;font-size:0.5rem;color:var(--text3);margin-bottom:2px;}
+    .c-box .cv{font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--cyan);font-weight:500;}
+
+    .seg{display:flex;background:var(--bg);border-radius:6px;padding:2px;gap:2px;}
+    .seg-btn{flex:1;padding:5px;border:none;border-radius:5px;background:transparent;color:var(--text3);font-family:'Inter',sans-serif;font-size:0.65rem;font-weight:500;cursor:pointer;transition:all 0.15s;}
+    .seg-btn.on{background:var(--panel2);color:var(--cyan);border:1px solid rgba(0,212,255,0.2);}
+
+    .cam-wrap{display:none;position:relative;border-radius:6px;overflow:hidden;height:100px;background:#000;margin-top:7px;}
+    .cam-wrap.show{display:block;}
+    #cameraPreview{width:100%;height:100%;object-fit:cover;opacity:0.9;}
+    .cam-ring{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:38px;height:38px;border-radius:50%;border:2px solid var(--cyan);background:rgba(0,212,255,0.08);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:0.9rem;font-weight:700;color:var(--cyan);}
+
+    .int-row{display:flex;align-items:center;gap:8px;margin-top:7px;}
+    .int-row span{font-size:0.6rem;color:var(--text3);}
+    .int-row input[type=range]{flex:1;accent-color:var(--cyan);height:2px;}
+    .int-val{font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:var(--cyan);min-width:24px;text-align:right;}
+
+    /* ── KML IMPORT BLOCK ── */
+    .kml-dz{border:1.5px dashed var(--border2);border-radius:6px;padding:8px;text-align:center;cursor:pointer;transition:all 0.15s;position:relative;margin-top:4px;}
+    .kml-dz:hover,.kml-dz.over{border-color:var(--cyan);background:var(--cyan-dim);}
+    .kml-dz input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+    .kml-dz-text{font-size:0.62rem;color:var(--text3);line-height:1.5;}
+    .kml-dz-text strong{color:var(--cyan);display:block;font-size:0.65rem;}
+    .kml-status{font-family:'JetBrains Mono',monospace;font-size:0.58rem;color:var(--green);margin-top:5px;display:none;}
+
+    .act-btn{width:100%;padding:8px;border:none;border-radius:6px;font-family:'Inter',sans-serif;font-weight:600;font-size:0.72rem;cursor:pointer;transition:all 0.15s;letter-spacing:0.02em;}
+    .act-btn+.act-btn{margin-top:4px;}
+    .btn-go{background:var(--cyan);color:#111318;}
+    .btn-go:hover{background:#33ddff;box-shadow:0 0 16px var(--cyan-glow);}
+    .btn-go:disabled{opacity:0.35;cursor:not-allowed;box-shadow:none;}
+    .btn-halt{background:transparent;color:var(--red);border:1px solid rgba(239,68,68,0.3);}
+    .btn-halt:disabled{opacity:0.3;cursor:not-allowed;}
+    .btn-save{background:transparent;color:var(--text2);border:1px solid var(--border2);}
+    .btn-save:hover{color:var(--cyan);border-color:rgba(0,212,255,0.3);}
+    .btn-save:disabled{opacity:0.3;cursor:not-allowed;}
+
+    .kpi-row{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
+    .kpi{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:7px 8px;}
+    .kpi .kv{font-family:'JetBrains Mono',monospace;font-size:1.1rem;font-weight:700;color:var(--cyan);}
+    .kpi .kl{font-size:0.52rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-top:1px;}
+
+    /* FEED — keep own scroll as before */
+    .feed{flex:1;overflow-y:auto;padding:6px;min-height:80px;}
+    .feed::-webkit-scrollbar{width:2px;}
+    .feed::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+    .feed-item{display:flex;gap:7px;align-items:center;padding:6px 8px;border-radius:7px;cursor:pointer;border:1px solid transparent;transition:all 0.12s;margin-bottom:2px;}
+    .feed-item:hover,.feed-item.on{background:var(--panel2);border-color:var(--border2);}
+    .feed-item img{width:40px;height:30px;object-fit:cover;border-radius:4px;flex-shrink:0;opacity:0.85;}
+    .feed-item .fi{flex:1;min-width:0;}
+    .feed-item .fn{font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--cyan);font-weight:600;}
+    .feed-item .fc{font-family:'JetBrains Mono',monospace;font-size:0.54rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .feed-empty{text-align:center;padding:20px 10px;color:var(--text3);font-size:0.68rem;line-height:2;}
+    .feed-empty .ei{font-size:1.4rem;margin-bottom:5px;opacity:0.3;}
+
+    .ovl{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:center;justify-content:center;backdrop-filter:blur(6px);}
+    .ovl.show{display:flex;}
+    .pop{background:var(--panel);border:1px solid var(--border2);border-radius:12px;padding:16px;max-width:380px;width:92%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.7);}
+    .pop img{width:100%;border-radius:7px;margin-bottom:10px;max-height:160px;object-fit:cover;}
+    .pop-meta{font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:var(--text3);line-height:2.2;}
+    .pop-meta span{color:var(--cyan);}
+    .pop-hint{font-size:0.62rem;color:var(--text3);margin-top:8px;padding:7px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;}
+    .pop-close{margin-top:10px;width:100%;padding:7px;background:transparent;border:1px solid var(--border2);color:var(--text2);border-radius:7px;cursor:pointer;font-family:'Inter',sans-serif;font-size:0.72rem;font-weight:500;transition:all 0.15s;}
+    .pop-close:hover{border-color:rgba(0,212,255,0.4);color:var(--cyan);}
+
+    .flash{position:fixed;inset:0;background:white;z-index:99999;pointer-events:none;animation:fa 0.3s ease-out forwards;}
+    @keyframes fa{0%{opacity:0.7}100%{opacity:0}}
+
+    @media(max-width:640px){
+      .panel{width:100%;border-right:none;border-bottom:1px solid var(--border);max-height:50vh;overflow-y:auto;}
+      .workspace{flex-direction:column;}
+      #map{flex:1;min-height:50vh;}
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="brand-dot"></div>
+    <div class="brand-name">Kumbh Path Mapper</div>
+  </div>
+  <div class="header-chips">
+    <div class="chip"><div class="chip-dot on" id="hGpsDot"></div><span id="hGpsTxt">Acquiring GPS</span></div>
+    <div class="chip" id="photoChip"><div class="chip-dot"></div><span id="photoChipTxt">0 photos</span></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <div class="tog-wrap">
+      <span class="tog-lbl">☀️</span>
+      <label class="tog">
+        <input type="checkbox" id="themeToggle" checked onchange="toggleTheme(this.checked)"/>
+        <div class="tog-bar"></div>
+      </label>
+      <span class="tog-lbl">🌙</span>
+    </div>
+    <a href="./analyzer.html" class="nav-btn primary">Analyzer →</a>
+  </div>
+</header>
+
+<div class="workspace">
+  <div class="panel">
+    <div class="panel-top">
+      <div class="panel-heading">Field Capture <span class="badge" id="sessionBadge">IDLE</span></div>
+    </div>
+
+    <!-- GPS -->
+    <div class="block">
+      <div class="lbl">GPS Signal</div>
+      <div class="gps-row"><div class="g-dot warn" id="gpsDot"></div><span class="gps-label" id="gpsStatus">Acquiring signal...</span></div>
+      <div class="coord-pair">
+        <div class="c-box"><div class="ck">LAT</div><div class="cv" id="cLat">—</div></div>
+        <div class="c-box"><div class="ck">LNG</div><div class="cv" id="cLng">—</div></div>
+        <div class="c-box" style="grid-column:1/-1"><div class="ck">ACCURACY</div><div class="cv" id="cAcc">—</div></div>
+      </div>
+    </div>
+
+    <!-- KML IMPORT — NEW BLOCK -->
+    <div class="block">
+      <div class="lbl">KML Layer Import</div>
+      <div class="kml-dz" id="kmlDZ">
+        <input type="file" accept=".kml,.kmz" id="kmlInput"/>
+        <div class="kml-dz-text"><strong>📌 Drop KML / KMZ here</strong>Overlays route on map</div>
+      </div>
+      <div class="kml-status" id="kmlStatus"></div>
+    </div>
+
+    <!-- MODE -->
+    <div class="block">
+      <div class="lbl">Capture Mode</div>
+      <div class="seg">
+        <button class="seg-btn on" id="mAuto" onclick="setMode('auto')">⚡ Auto</button>
+        <button class="seg-btn" id="mManual" onclick="setMode('manual')">📸 Manual</button>
+      </div>
+      <div class="cam-wrap show" id="camWrap">
+        <video id="cameraPreview" autoplay playsinline muted></video>
+        <div class="cam-ring" id="camRing">—</div>
+      </div>
+      <div class="int-row">
+        <span>Interval</span>
+        <input type="range" id="intervalSlider" min="5" max="30" value="10" step="5"/>
+        <div class="int-val"><span id="intervalVal">10</span>s</div>
+      </div>
+    </div>
+
+    <!-- CONTROLS -->
+    <div class="block">
+      <button class="act-btn btn-go" id="btnStart">▶  Start Capture</button>
+      <button class="act-btn btn-halt" id="btnStop" disabled>■  Stop</button>
+      <button class="act-btn btn-save" id="btnExport" disabled style="margin-top:6px;">↓  Export JSON</button>
+    </div>
+
+    <!-- KPIs -->
+    <div class="block">
+      <div class="kpi-row">
+        <div class="kpi"><div class="kv" id="kCount">0</div><div class="kl">Photos</div></div>
+        <div class="kpi"><div class="kv" id="kNext" style="color:var(--purple)">—</div><div class="kl">Next in</div></div>
+      </div>
+    </div>
+
+    <!-- FEED -->
+    <div class="feed" id="feed">
+      <div class="feed-empty" id="feedEmpty"><div class="ei">📍</div>Start capture to begin<br>logging geotagged photos</div>
+    </div>
+  </div>
+
+  <div id="map"></div>
+</div>
+
+<div class="ovl" id="ovl">
+  <div class="pop">
+    <img id="popImg" src="" alt=""/>
+    <div class="pop-meta" id="popMeta"></div>
+    <div class="pop-hint">💡 Export session JSON → open in Analyzer for AI safety detection</div>
+    <button class="pop-close" onclick="closePopup()">Close</button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const map = L.map('map', { zoomControl:false }).setView([25.4358, 81.8463], 15);
+  let tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution:'© OpenStreetMap © CARTO', maxZoom:19
+  }).addTo(map);
+  L.control.zoom({ position:'bottomright' }).addTo(map);
+
+  function toggleTheme(isDark) {
+    document.body.classList.toggle('light', !isDark);
+    map.removeLayer(tileLayer);
+    tileLayer = L.tileLayer(
+      isDark
+        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+        : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+      { attribution:'© OpenStreetMap © CARTO', maxZoom:19 }
+    ).addTo(map);
+  }
+
+  const mkIcon = (n, c='#00d4ff') => L.divIcon({
+    className:'',
+    html:`<div style="background:${c};color:#111318;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:8px;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 0 10px ${c}99;border:1.5px solid rgba(255,255,255,0.2);">${n}</div>`,
+    iconSize:[24,24], iconAnchor:[12,12]
+  });
+
+  let capturing=false, mode='auto', autoIv=null, cdTimer=null, cd=0;
+  let points=[], pos=null, stream=null, imgCap=null, mkrs={};
+  let kmlLayers=[];
+  const poly = L.polyline([], { color:'#00d4ff', weight:2, opacity:0.6, dashArray:'5,4' }).addTo(map);
+
+  // ── GPS ────────────────────────────────────────────────
+  function setDot(id, s){ const el=document.getElementById(id); el.className='g-dot'+(s==='active'?' active':s==='error'?' error':s==='warn'?' warn':''); }
+  function setHDot(s){ const el=document.getElementById('hGpsDot'); el.className='chip-dot'+(s==='on'?' on':''); }
+
+  function onGPS(p){
+    pos=p.coords;
+    setDot('gpsDot','active'); setHDot('on');
+    document.getElementById('gpsStatus').textContent='GPS Active ✓';
+    document.getElementById('hGpsTxt').textContent='GPS Active';
+    document.getElementById('cLat').textContent=pos.latitude.toFixed(6);
+    document.getElementById('cLng').textContent=pos.longitude.toFixed(6);
+    document.getElementById('cAcc').textContent=`±${Math.round(pos.accuracy)}m`;
+    if (!points.length) map.setView([pos.latitude, pos.longitude], 17);
+  }
+  function onGPSErr(e){
+    const m=e.code===1?'Location blocked':e.code===2?'GPS unavailable':'GPS timeout';
+    setDot('gpsDot','error'); setHDot('');
+    document.getElementById('gpsStatus').textContent=m;
+    document.getElementById('hGpsTxt').textContent=m;
+  }
+
+  setDot('gpsDot','warn');
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(p=>{ onGPS(p); navigator.geolocation.watchPosition(onGPS, onGPSErr, {enableHighAccuracy:true,maximumAge:3000,timeout:20000}); }, onGPSErr, {enableHighAccuracy:true,maximumAge:0,timeout:20000});
+  }
+
+  document.getElementById('intervalSlider').addEventListener('input', e=>{ document.getElementById('intervalVal').textContent=e.target.value; });
+
+  // ── KML IMPORT ────────────────────────────────────────
+  const kmlDZ = document.getElementById('kmlDZ');
+  kmlDZ.addEventListener('dragover', e=>{ e.preventDefault(); kmlDZ.classList.add('over'); });
+  kmlDZ.addEventListener('dragleave', ()=>kmlDZ.classList.remove('over'));
+  kmlDZ.addEventListener('drop', e=>{ e.preventDefault(); kmlDZ.classList.remove('over'); const f=e.dataTransfer.files[0]; if(f) loadKML(f); });
+  document.getElementById('kmlInput').addEventListener('change', e=>{ const f=e.target.files[0]; if(f){ loadKML(f); e.target.value=''; } });
+
+  function loadKML(file) {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        // Remove old KML layers
+        kmlLayers.forEach(l=>map.removeLayer(l));
+        kmlLayers=[];
+
+        const parser = new DOMParser();
+        const kmlDoc = parser.parseFromString(ev.target.result, 'text/xml');
+        const placemarks = kmlDoc.querySelectorAll('Placemark');
+        let bounds=[], count=0;
+
+        placemarks.forEach(pm => {
+          const name = pm.querySelector('name')?.textContent || '';
+
+          // LineString / path
+          const ls = pm.querySelector('LineString coordinates, MultiGeometry LineString coordinates');
+          if (ls) {
+            const coords = ls.textContent.trim().split(/\s+/).map(c=>{
+              const [lng,lat]=c.split(',').map(Number);
+              return [lat,lng];
+            }).filter(c=>!isNaN(c[0])&&!isNaN(c[1]));
+            if (coords.length) {
+              const line = L.polyline(coords, { color:'#8b5cf6', weight:3, opacity:0.8 }).addTo(map);
+              line.bindTooltip(name||'KML Route', {sticky:true});
+              kmlLayers.push(line);
+              bounds.push(...coords);
+              count++;
+            }
+          }
+
+          // Point
+          const pt = pm.querySelector('Point coordinates');
+          if (pt) {
+            const [lng,lat] = pt.textContent.trim().split(',').map(Number);
+            if (!isNaN(lat)&&!isNaN(lng)) {
+              const mk = L.circleMarker([lat,lng], { radius:6, color:'#8b5cf6', fillColor:'#8b5cf6', fillOpacity:0.7, weight:2 }).addTo(map);
+              if (name) mk.bindTooltip(name, {sticky:true});
+              kmlLayers.push(mk);
+              bounds.push([lat,lng]);
+              count++;
+            }
+          }
+
+          // Polygon
+          const poly_coords = pm.querySelector('Polygon outerBoundaryIs coordinates');
+          if (poly_coords) {
+            const coords = poly_coords.textContent.trim().split(/\s+/).map(c=>{
+              const [lng,lat]=c.split(',').map(Number);
+              return [lat,lng];
+            }).filter(c=>!isNaN(c[0])&&!isNaN(c[1]));
+            if (coords.length) {
+              const pg = L.polygon(coords, { color:'#8b5cf6', weight:2, opacity:0.8, fillOpacity:0.12 }).addTo(map);
+              if (name) pg.bindTooltip(name, {sticky:true});
+              kmlLayers.push(pg);
+              bounds.push(...coords);
+              count++;
+            }
+          }
+        });
+
+        const statusEl = document.getElementById('kmlStatus');
+        if (count > 0) {
+          statusEl.textContent=`✓ ${count} feature${count>1?'s':''} loaded`;
+          statusEl.style.display='block';
+          if (bounds.length) map.fitBounds(bounds, {padding:[40,40]});
+        } else {
+          statusEl.textContent='⚠ No features found in KML';
+          statusEl.style.display='block';
+          statusEl.style.color='var(--amber)';
+        }
+      } catch(err) {
+        const statusEl = document.getElementById('kmlStatus');
+        statusEl.textContent='⚠ KML parse error';
+        statusEl.style.display='block';
+        statusEl.style.color='var(--red)';
+        console.error('KML error:', err);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  // ── MODE ───────────────────────────────────────────────
+  function setMode(m){
+    mode=m;
+    document.getElementById('mAuto').classList.toggle('on', m==='auto');
+    document.getElementById('mManual').classList.toggle('on', m==='manual');
+    document.getElementById('camWrap').classList.toggle('show', m==='auto');
+    if (m==='auto' && !stream) initCam();
+    if (m==='manual' && stream) stopStream();
+  }
+  async function initCam(){
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment', width:{ideal:1280} } });
+      document.getElementById('cameraPreview').srcObject=stream;
+      imgCap = new ImageCapture(stream.getVideoTracks()[0]);
+    } catch(e){ setMode('manual'); }
+  }
+  function stopStream(){ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; imgCap=null; } }
+  initCam();
+
+  // ── CONTROLS ───────────────────────────────────────────
+  document.getElementById('btnStart').addEventListener('click', go);
+  document.getElementById('btnStop').addEventListener('click', halt);
+  document.getElementById('btnExport').addEventListener('click', doExport);
+
+  async function go(){
+    if (!pos) { navigator.geolocation.getCurrentPosition(p=>{ onGPS(p); go(); }, ()=>alert('Allow location access.')); return; }
+    if (mode==='auto'){
+      if (!imgCap){ await initCam(); if(!imgCap){ setMode('manual'); go(); return; } }
+      capturing=true;
+      document.getElementById('btnStart').disabled=true;
+      document.getElementById('btnStop').disabled=false;
+      document.getElementById('sessionBadge').textContent='ACTIVE';
+      document.getElementById('sessionBadge').style.color='var(--green)';
+      await snap();
+      startAuto();
+    } else { manualCapture(); }
+  }
+
+  function startAuto(){
+    const iv=parseInt(document.getElementById('intervalSlider').value)*1000;
+    cd=iv/1000; updateCD();
+    cdTimer=setInterval(()=>{ cd--; updateCD(); }, 1000);
+    autoIv=setInterval(async()=>{ if(!capturing) return; clearInterval(cdTimer); cdTimer=null; await snap(); cd=iv/1000; updateCD(); cdTimer=setInterval(()=>{ cd--; updateCD(); }, 1000); }, iv);
+  }
+
+  async function snap(){
+    if (!imgCap||!pos) return;
+    try {
+      const blob=await imgCap.takePhoto();
+      const f=document.createElement('div'); f.className='flash'; document.body.appendChild(f); setTimeout(()=>f.remove(),300);
+      if(navigator.vibrate) navigator.vibrate(60);
+      const r=new FileReader(); r.onload=ev=>save(ev.target.result); r.readAsDataURL(blob);
+    } catch(e){ console.error(e); }
+  }
+
+  function updateCD(){
+    const r=document.getElementById('camRing'), k=document.getElementById('kNext');
+    if (capturing&&mode==='auto'){ r.textContent=cd>0?cd:'📸'; k.textContent=cd+'s'; }
+    else { r.textContent='—'; k.textContent='—'; }
+  }
+
+  // ── MANUAL CAPTURE — FIXED ────────────────────────────
+  function manualCapture(){
+    // FIX: clear any previous pending timer before starting a new one
+    if (cdTimer) { clearInterval(cdTimer); cdTimer=null; }
+
+    const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.capture='environment';
+    inp.onchange=e=>{
+      const f=e.target.files[0]; if(!f) return;
+      capturing=true;
+      document.getElementById('btnStart').disabled=true;
+      document.getElementById('btnStop').disabled=false;
+      document.getElementById('sessionBadge').textContent='ACTIVE';
+      document.getElementById('sessionBadge').style.color='var(--green)';
+      const r=new FileReader();
+      r.onload=ev=>{ save(ev.target.result); scheduleNext(); };
+      r.readAsDataURL(f);
+    };
+    // FIX: if user dismisses file picker without choosing, don't leave capture broken
+    inp.addEventListener('cancel', ()=>{
+      if (!points.length) {
+        capturing=false;
+        document.getElementById('btnStart').disabled=false;
+        document.getElementById('btnStop').disabled=true;
+        document.getElementById('sessionBadge').textContent='IDLE';
+        document.getElementById('sessionBadge').style.color='';
+      }
+    });
+    inp.click();
+  }
+
+  function scheduleNext(){
+    // FIX: clear previous timer before scheduling new one
+    if (cdTimer) { clearInterval(cdTimer); cdTimer=null; }
+    const iv=parseInt(document.getElementById('intervalSlider').value);
+    cd=iv;
+    document.getElementById('kNext').textContent=cd+'s';
+    document.getElementById('camRing').textContent=cd;
+    cdTimer=setInterval(()=>{
+      cd--;
+      document.getElementById('kNext').textContent=cd>0?cd+'s':'📸';
+      document.getElementById('camRing').textContent=cd>0?cd:'📸';
+      if(cd<=0){
+        clearInterval(cdTimer); cdTimer=null;
+        if(capturing) manualCapture();  // FIX: only trigger if still capturing
+      }
+    }, 1000);
+  }
+
+  function save(img){
+    const pt={ id:points.length+1, lat:pos.latitude, lng:pos.longitude, accuracy:Math.round(pos.accuracy), timestamp:new Date().toISOString(), image:img };
+    points.push(pt);
+    addMkr(pt); addFeed(pt);
+    document.getElementById('kCount').textContent=points.length;
+    document.getElementById('photoChipTxt').textContent=`${points.length} photo${points.length>1?'s':''}`;
+    document.getElementById('btnExport').disabled=false;
+    poly.setLatLngs(points.map(p=>[p.lat,p.lng]));
+    map.panTo([pt.lat,pt.lng]);
+  }
+
+  function halt(){
+    capturing=false;
+    clearInterval(autoIv); clearInterval(cdTimer); autoIv=null; cdTimer=null;
+    document.getElementById('btnStart').disabled=false;
+    document.getElementById('btnStop').disabled=true;
+    document.getElementById('kNext').textContent='—';
+    document.getElementById('camRing').textContent='—';
+    document.getElementById('sessionBadge').textContent='STOPPED';
+    document.getElementById('sessionBadge').style.color='var(--amber)';
+  }
+
+  function addMkr(pt){
+    const m=L.marker([pt.lat,pt.lng],{icon:mkIcon(pt.id,'#00d4ff')}).addTo(map);
+    m.on('click',()=>showPopup(pt)); mkrs[pt.id]=m;
+  }
+
+  function addFeed(pt){
+    document.getElementById('feedEmpty')?.remove();
+    const feed=document.getElementById('feed');
+    const el=document.createElement('div'); el.className='feed-item'; el.id=`fi-${pt.id}`;
+    el.innerHTML=`<img src="${pt.image}" alt=""/><div class="fi"><div class="fn">#${pt.id}</div><div class="fc">${pt.lat.toFixed(4)}, ${pt.lng.toFixed(4)}</div><div class="fc" style="color:var(--text3)">${new Date(pt.timestamp).toLocaleTimeString()}</div></div>`;
+    el.addEventListener('click',()=>{ showPopup(pt); map.panTo([pt.lat,pt.lng]); document.querySelectorAll('.feed-item').forEach(e=>e.classList.remove('on')); el.classList.add('on'); });
+    feed.appendChild(el); feed.scrollTop=feed.scrollHeight;
+  }
+
+  function showPopup(pt){
+    document.getElementById('popImg').src=pt.image;
+    document.getElementById('popMeta').innerHTML=`Photo <span>#${pt.id}</span><br>Lat <span>${pt.lat.toFixed(7)}</span><br>Lng <span>${pt.lng.toFixed(7)}</span><br>Accuracy <span>±${pt.accuracy}m</span><br>Time <span>${new Date(pt.timestamp).toLocaleString()}</span>`;
+    document.getElementById('ovl').classList.add('show');
+  }
+  function closePopup(){ document.getElementById('ovl').classList.remove('show'); }
+  document.getElementById('ovl').addEventListener('click', e=>{ if(e.target===e.currentTarget) closePopup(); });
+
+  function doExport(){
+    if (!points.length){ alert('No photos yet!'); return; }
+    const data={ session:{ exported_at:new Date().toISOString(), total_photos:points.length }, points:points.map(p=>({ id:p.id, lat:p.lat, lng:p.lng, accuracy:p.accuracy, timestamp:p.timestamp, image:p.image })) };
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=`kumbh-${new Date().toISOString().slice(0,10)}.json`;
+    a.click(); URL.revokeObjectURL(a.href);
+    document.getElementById('sessionBadge').textContent='EXPORTED';
+    document.getElementById('sessionBadge').style.color='var(--cyan)';
+  }
+</script>
+</body>
+</html>
