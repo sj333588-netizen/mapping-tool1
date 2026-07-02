@@ -819,6 +819,17 @@
           <div class="sim-live-card" id="simLiveCard">
             <div id="simLiveContent"></div>
           </div>
+
+          <!-- ANIMATED CROWD VISUALIZER -->
+          <div style="margin-top:12px;">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:0.55rem;color:var(--text3);letter-spacing:0.1em;margin-bottom:6px;">🎬 LIVE CROWD VISUALIZATION</div>
+            <div style="position:relative;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);">
+              <canvas id="crowdCanvas" width="520" height="140" style="width:100%;height:auto;display:block;background:#0a0d14;"></canvas>
+              <div id="crowdLosLabel" style="position:absolute;top:6px;right:8px;font-family:'JetBrains Mono',monospace;font-size:0.6rem;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(0,0,0,0.7);"></div>
+            </div>
+            <div style="font-size:0.55rem;color:var(--text3);margin-top:4px;text-align:center;">Each figure = 1 pilgrim · Speed reflects actual LOS crowd flow rate</div>
+          </div>
+
           <div style="font-size:0.56rem;color:var(--text3);margin-top:8px;">Based on Fruin LOS standard (1971) · Estimates for planning purposes only</div>
         </div>
       </div>
@@ -1823,6 +1834,220 @@ function renderSimLive(r, scenario){
     </div>
     ${r.warnings.length ? `<div class="sim-warn-list">${r.warnings.map(w=>`<div class="sim-warn-item">${w}</div>`).join('')}</div>` : `<div style="font-size:0.62rem;color:#10b981;margin-top:8px;">✓ No critical warnings for these conditions</div>`}
   `;
+
+  // Update animated crowd canvas
+  updateCrowdCanvas(r, scenario);
+}
+
+// ── ANIMATED CROWD VISUALIZER ───────────────────────────────────────────────
+// Draws animated stick-figure pilgrims on a top-down road view.
+// Speed, spacing, and jamming behaviour are derived directly from the
+// Fruin LOS density that the scenario calculator already computes —
+// so the animation is grounded in the same numbers shown in the data cards.
+let crowdAnimFrame = null;
+let crowdFigures = [];
+
+const LOS_SPEED = { // pixels per second at canvas scale
+  'A': 2.2, 'B': 1.7, 'C': 1.1, 'D': 0.6, 'E': 0.25, 'F': 0
+};
+
+function makeFigure(canvasW, canvasH, roadTop, roadH, color, isRain){
+  return {
+    x: Math.random() * canvasW,
+    y: roadTop + 8 + Math.random() * (roadH - 16),
+    speed: 0, // set per-frame from LOS
+    wobble: Math.random() * Math.PI * 2,
+    color,
+    isRain,
+    stuck: false,
+    stuckTimer: 0,
+    size: 6 + Math.random() * 2
+  };
+}
+
+function drawStickFigure(ctx, x, y, size, color, speed, wobble, t, isRain){
+  const walk = speed > 0.3 ? Math.sin(t * 6 + wobble) * 3 : 0;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = 'round';
+
+  // Head
+  ctx.beginPath();
+  ctx.arc(x, y - size*1.4, size*0.45, 0, Math.PI*2);
+  ctx.fill();
+
+  // Body
+  ctx.beginPath();
+  ctx.moveTo(x, y - size*0.9);
+  ctx.lineTo(x, y + size*0.3);
+  ctx.stroke();
+
+  // Arms (swing with walk)
+  ctx.beginPath();
+  ctx.moveTo(x - size*0.6, y - size*0.3 + walk*0.4);
+  ctx.lineTo(x + size*0.6, y - size*0.3 - walk*0.4);
+  ctx.stroke();
+
+  // Legs (opposite swing)
+  ctx.beginPath();
+  ctx.moveTo(x, y + size*0.3);
+  ctx.lineTo(x - size*0.5, y + size + walk);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x, y + size*0.3);
+  ctx.lineTo(x + size*0.5, y + size - walk);
+  ctx.stroke();
+
+  // Rain drop on head
+  if(isRain && Math.random() < 0.008){
+    ctx.fillStyle = '#60a5fa88';
+    ctx.beginPath();
+    ctx.arc(x + Math.random()*20-10, y - size*2 - Math.random()*10, 1.5, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function updateCrowdCanvas(r, scenario){
+  const canvas = document.getElementById('crowdCanvas');
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  // Stop previous animation
+  if(crowdAnimFrame){ cancelAnimationFrame(crowdAnimFrame); crowdAnimFrame = null; }
+
+  const losLetter = r.losGrade.label.charAt(0);
+  const baseSpeed = LOS_SPEED[losLetter] ?? 0;
+
+  // LOS colour for figures
+  const figColor = r.losGrade.color;
+
+  // Road dimensions — barricade shrinks the road visually
+  const widthFactor = 1 - (scenario.widthFactor < 1 ? (1 - scenario.widthFactor) : 0);
+  const roadH = Math.round(H * 0.55 * (scenario.widthFactor));
+  const roadTop = Math.round((H - roadH) / 2);
+
+  // Number of figures — capped at 60 for perf; scaled to density
+  const figCount = Math.min(60, Math.max(3, Math.round(r.simPed * 0.4)));
+
+  // Re-init figures when count changes meaningfully
+  if(Math.abs(crowdFigures.length - figCount) > 2){
+    crowdFigures = Array.from({length: figCount}, () =>
+      makeFigure(W, H, roadTop, roadH, figColor, scenario.rain));
+  } else {
+    // update colour/rain without resetting positions
+    crowdFigures.forEach(f=>{ f.color = figColor; f.isRain = scenario.rain; });
+  }
+
+  // Update LOS label
+  const label = document.getElementById('crowdLosLabel');
+  if(label){
+    label.textContent = 'LOS ' + r.losGrade.label;
+    label.style.color = figColor;
+    label.style.borderColor = figColor+'55';
+    label.style.border = '1px solid';
+  }
+
+  let lastT = null;
+  function frame(ts){
+    if(!lastT) lastT = ts;
+    const dt = Math.min((ts - lastT)/1000, 0.05);
+    lastT = ts;
+    const t = ts/1000;
+
+    // Background — road scene
+    ctx.fillStyle = '#0a0d14';
+    ctx.fillRect(0, 0, W, H);
+
+    // Footpath strips (sides)
+    ctx.fillStyle = '#1a1f2e';
+    ctx.fillRect(0, 0, W, roadTop);
+    ctx.fillRect(0, roadTop + roadH, W, H - roadTop - roadH);
+
+    // Road surface
+    ctx.fillStyle = '#141820';
+    ctx.fillRect(0, roadTop, W, roadH);
+
+    // Road lane markings
+    ctx.setLineDash([18, 12]);
+    ctx.strokeStyle = '#ffffff18';
+    ctx.lineWidth = 1.5;
+    for(let lane = 1; lane < 3; lane++){
+      const ly = roadTop + (roadH / 3) * lane;
+      ctx.beginPath(); ctx.moveTo(0, ly); ctx.lineTo(W, ly); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // Road edges
+    ctx.strokeStyle = '#ffffff22';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, roadTop); ctx.lineTo(W, roadTop); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, roadTop+roadH); ctx.lineTo(W, roadTop+roadH); ctx.stroke();
+
+    // Barricade markers at edges when width reduced
+    if(scenario.widthFactor < 1){
+      const barH = (H - roadH) / 2;
+      ctx.fillStyle = '#f59e0b';
+      for(let bx = 0; bx < W; bx += 30){
+        ctx.fillRect(bx, roadTop - 3, 12, 3);
+        ctx.fillRect(bx, roadTop + roadH, 12, 3);
+      }
+    }
+
+    // Rain streaks
+    if(scenario.rain){
+      ctx.strokeStyle = '#60a5fa22';
+      ctx.lineWidth = 1;
+      for(let i=0; i<30; i++){
+        const rx = (Math.random()*W + t*80) % W;
+        const ry = (Math.random()*H + t*200) % H;
+        ctx.beginPath(); ctx.moveTo(rx, ry); ctx.lineTo(rx-2, ry+8); ctx.stroke();
+      }
+    }
+
+    // Move & draw figures
+    const speedScale = 60; // pixels per unit speed
+    crowdFigures.forEach((f, i) => {
+      // Separation force — push apart if too close (jam effect at high density)
+      let sepX = 0;
+      crowdFigures.forEach((g, j) => {
+        if(i===j) return;
+        const dx = f.x - g.x, dy = f.y - g.y;
+        const d = Math.sqrt(dx*dx+dy*dy);
+        if(d < 14){
+          sepX += dx / (d+0.1) * 0.4;
+        }
+      });
+
+      // Speed — reduced by local crowding (separation forces indicate congestion)
+      const crowdingFactor = Math.max(0, 1 - Math.abs(sepX)*0.8);
+      const fSpeed = baseSpeed * crowdingFactor * speedScale;
+
+      f.x += (fSpeed + sepX * 0.5) * dt;
+      f.y += (Math.sin(t*0.4 + f.wobble)*0.2) * dt; // gentle vertical drift
+      f.y = Math.max(roadTop+8, Math.min(roadTop+roadH-8, f.y));
+
+      // Wrap around
+      if(f.x > W + 10) f.x = -10;
+      if(f.x < -10) f.x = W + 10;
+
+      drawStickFigure(ctx, f.x, f.y, f.size, f.color, fSpeed, f.wobble, t, f.isRain);
+    });
+
+    // Jam overlay — red pulse when LOS E/F
+    if(losLetter === 'E' || losLetter === 'F'){
+      const pulse = (Math.sin(t*2)+1)/2 * 0.12;
+      ctx.fillStyle = `rgba(220,38,38,${pulse})`;
+      ctx.fillRect(0, roadTop, W, roadH);
+    }
+
+    crowdAnimFrame = requestAnimationFrame(frame);
+  }
+
+  crowdAnimFrame = requestAnimationFrame(frame);
 }
 
 // ── ANNOTATION — Pure CSS divs, always inside photo ──────────
