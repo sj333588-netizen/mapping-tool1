@@ -559,7 +559,7 @@
       </div>
       <div class="quant-grid">
         <div class="quant-cell"><div class="qk">Road Width</div><div class="qv" id="quantWidth">—</div></div>
-        <div class="quant-cell"><div class="qk">Area (est.)</div><div class="qv" id="quantArea">—</div></div>
+        <div class="quant-cell"><div class="qk">Area (est.)</div><div class="qv" id="quantArea">—</div><div id="quantNetArea" style="font-size:0.55rem;margin-top:2px;color:var(--text3);"></div></div>
         <div class="quant-cell"><div class="qk">Intersection</div><div class="qv" id="quantInt" style="font-size:0.6rem">—</div></div>
         <div class="quant-cell"><div class="qk">Pedestrians</div><div class="qv" id="quantPed" style="color:var(--cyan)">—</div><div id="quantPedVerify" style="font-size:0.55rem;margin-top:2px;"></div></div>
         <div class="quant-cell"><div class="qk">Vehicles</div><div class="qv" id="quantVeh" style="color:var(--amber)">—</div></div>
@@ -583,6 +583,21 @@
         <div id="quantFlowDetail" style="font-size:0.65rem;color:var(--text3);"></div>
         <div id="quantFlowDensity" style="font-size:0.65rem;color:var(--text2);margin-top:3px;"></div>
         <div id="quantFlowWarn" style="display:none;font-size:0.65rem;color:var(--amber);background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:5px;padding:6px 8px;margin-top:6px;"></div>
+      </div>
+
+      <!-- Predicted Risks (Kumbh-scenario, not currently visible) -->
+      <div class="quant-vehicles" id="quantPredictWrap" style="display:none">
+        <div class="qk">🔮 PREDICTED RISKS — UNDER KUMBH CONDITIONS</div>
+        <div style="font-size:0.6rem;color:var(--text3);margin:2px 0 6px;">Structural risk if barricades/crowd surge/rain apply here — not currently visible in this photo</div>
+        <div id="quantPredictList"></div>
+      </div>
+
+      <!-- Scenario Simulator -->
+      <div class="quant-vehicles" id="quantSimWrap" style="display:none">
+        <div class="qk">🎯 KUMBH EVENT SCENARIO SIMULATION</div>
+        <div style="font-size:0.6rem;color:var(--text3);margin:2px 0 8px;">Parametric what-if analysis — 3 scenarios showing how conditions change from current to worst-case Kumbh event</div>
+        <div id="simScenarios"></div>
+        <div style="font-size:0.58rem;color:var(--text3);margin-top:6px;padding-top:6px;border-top:1px solid var(--border);">Based on Fruin LOS standard (1971) · Crowd multipliers are estimates for planning purposes</div>
       </div>
 
       <!-- Footpath -->
@@ -749,8 +764,13 @@ function computeCrowdFlow(q){
   }
 
   let density = null, densityLOS = null;
-  if(q.area_estimate_sqm && typeof q.pedestrian_count === 'number'){
-    density = +(q.pedestrian_count / q.area_estimate_sqm).toFixed(2);
+  // Use NET area (gross minus fixed obstacles like statues/poles/pillars)
+  // for density — pilgrims can't stand where a permanent structure is.
+  // Falls back to gross area if net_area_sqm isn't available (e.g. older
+  // cached audits from before this field existed).
+  const areaForDensity = (q.net_area_sqm !== undefined && q.net_area_sqm !== null) ? q.net_area_sqm : q.area_estimate_sqm;
+  if(areaForDensity && typeof q.pedestrian_count === 'number'){
+    density = +(q.pedestrian_count / areaForDensity).toFixed(2);
     densityLOS = DENSITY_LOS_BANDS.find(b=>density<=b.max) || DENSITY_LOS_BANDS[DENSITY_LOS_BANDS.length-1];
   }
 
@@ -876,6 +896,17 @@ async function callGroq(b64){
     walkability = 'partial';
   }
 
+  // Net Walkable Area — gross visible area minus permanent fixed obstacles
+  // (statues, poles, kiosks, etc. standing on the walking surface). The
+  // crowd-flow capacity formula should use this NET figure, not gross,
+  // since pilgrims can't physically occupy the space a statue/pillar takes up.
+  const fixedObstacles = Array.isArray(quant.fixed_obstacles) ? quant.fixed_obstacles : [];
+  const obstacleAreaTotal = fixedObstacles.reduce((sum, o) => sum + (Number(o?.area_sqm) || 0), 0);
+  const grossArea = quant.area_estimate_sqm || null;
+  const netArea = grossArea !== null ? Math.max(0, +(grossArea - obstacleAreaTotal).toFixed(1)) : null;
+
+  const predictedRisks = Array.isArray(quant.predicted_risks) ? quant.predicted_risks : [];
+
   return{
     findings,
     overall_risk:risk,
@@ -883,7 +914,11 @@ async function callGroq(b64){
     inspector_note:raw.inspector_note||'',
     quantification: {
       road_width_meters: quant.road_width_meters || null,
-      area_estimate_sqm: quant.area_estimate_sqm || null,
+      area_estimate_sqm: grossArea,
+      fixed_obstacles: fixedObstacles,
+      obstacle_area_sqm: +obstacleAreaTotal.toFixed(1),
+      net_area_sqm: netArea,
+      predicted_risks: predictedRisks,
       intersection_type: quant.intersection_type || 'not visible',
       pedestrian_count: quant.pedestrian_count ?? 0,
       vehicle_count: quant.vehicle_count ?? 0,
@@ -1232,6 +1267,29 @@ function showPopup(item){
     const q = item.aiData.quantification;
     document.getElementById('quantWidth').textContent = q.road_width_meters ? `${q.road_width_meters}m` : '—';
     document.getElementById('quantArea').textContent = q.area_estimate_sqm ? q.area_estimate_sqm + ' sqm' : '—';
+    // Net area — show if obstacles found
+    const netAreaEl = document.getElementById('quantNetArea');
+    if(q.net_area_sqm !== null && q.net_area_sqm !== undefined && q.obstacle_area_sqm > 0){
+      netAreaEl.innerHTML = `<span style="color:var(--amber);">Net: ${q.net_area_sqm} sqm</span> <span style="color:var(--text3);">(−${q.obstacle_area_sqm} fixed obstacles)</span>`;
+    } else if(q.net_area_sqm !== null && q.net_area_sqm !== undefined){
+      netAreaEl.innerHTML = `<span style="color:var(--green);font-size:0.55rem;">Net = Gross (no fixed obstacles)</span>`;
+    } else { netAreaEl.textContent = ''; }
+
+    // Predicted Risks
+    const predictWrap = document.getElementById('quantPredictWrap');
+    const predictList = document.getElementById('quantPredictList');
+    if(q.predicted_risks && q.predicted_risks.length > 0){
+      const riskColors = {high:'#dc2626', medium:'#f59e0b', low:'#10b981'};
+      predictList.innerHTML = q.predicted_risks.map(r=>`
+        <div style="border-left:2px solid ${riskColors[r.likelihood]||'#f59e0b'};padding:6px 10px;margin-bottom:6px;background:${riskColors[r.likelihood]||'#f59e0b'}0a;border-radius:0 6px 6px 0;">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+            <span style="font-size:0.65rem;font-weight:700;color:${riskColors[r.likelihood]||'#f59e0b'};">${r.likelihood?.toUpperCase()||'MEDIUM'}</span>
+            <span style="font-size:0.68rem;color:var(--text);font-weight:600;">${r.condition||''}</span>
+          </div>
+          <div style="font-size:0.65rem;color:var(--text2);line-height:1.4;">${r.reasoning||''}</div>
+        </div>`).join('');
+      predictWrap.style.display='';
+    } else { predictWrap.style.display='none'; }
     document.getElementById('quantPed').textContent = q.pedestrian_count ?? '—';
     const pedVerifyEl = document.getElementById('quantPedVerify');
     if(q.pedestrian_count_yolo !== undefined && q.pedestrian_count_yolo !== null){
@@ -1280,6 +1338,9 @@ function showPopup(item){
       }
       flowWrap.style.display='';
     } else flowWrap.style.display='none';
+
+    // Scenario Simulator — 3 scenarios (current / peak / worst case)
+    renderScenarioSim(q, flow);
 
     // Footpath
     const footWrap = document.getElementById('quantFootWrap');
@@ -1380,31 +1441,59 @@ function findingCard(f,isPositive=false){
   const sev=SEV_CONFIG[f.severity]||SEV_CONFIG.NONE;
   const cid=`fc-${++cardCounter}`;
   const icon=ICONS[f.id]||'⚠️';
-  const locBlock=f.location_in_frame?`<div class="ev-label evidence">📍 WHERE IN PHOTO</div><div class="ev-text" style="color:var(--cyan);font-weight:600;font-size:0.76rem;">${f.location_in_frame}</div>`:'';
-  const objectBlock=f.detected_object?`<div class="ev-label object">🔍 DETECTED OBJECT</div><div class="ev-object-chip">${f.detected_object}</div>`:'';
-  const impactBlock=f.pilgrim_impact?`<div class="ev-label impact">⚠️ PILGRIM IMPACT</div><div class="ev-impact-box">${f.pilgrim_impact}</div>`:'';
+  const c = sev.color;
+
+  // WHY is this dangerous — structured explanation
+  const whereBlock = f.location_in_frame ? `
+    <div style="background:rgba(0,212,255,0.06);border-left:2px solid var(--cyan);border-radius:0 6px 6px 0;padding:8px 10px;margin-bottom:8px;">
+      <div style="font-size:0.58rem;color:var(--cyan);letter-spacing:0.08em;margin-bottom:3px;">📍 EXACT LOCATION IN PHOTO</div>
+      <div style="font-size:0.72rem;color:var(--text);font-weight:600;">${f.location_in_frame}</div>
+    </div>` : '';
+
+  const objectBlock = f.detected_object ? `
+    <div style="background:var(--panel2);border-radius:6px;padding:8px 10px;margin-bottom:8px;">
+      <div style="font-size:0.58rem;color:var(--text3);letter-spacing:0.08em;margin-bottom:3px;">🔍 WHAT WAS DETECTED</div>
+      <div style="font-size:0.72rem;color:var(--text);">${f.detected_object}</div>
+    </div>` : '';
+
+  const evidenceBlock = f.visual_evidence ? `
+    <div style="margin-bottom:8px;">
+      <div style="font-size:0.58rem;color:var(--text3);letter-spacing:0.08em;margin-bottom:3px;">👁 VISUAL EVIDENCE — What AI observed</div>
+      <div style="font-size:0.7rem;color:var(--text2);line-height:1.5;">${f.visual_evidence}</div>
+    </div>` : '';
+
+  const impactBlock = f.pilgrim_impact ? `
+    <div style="background:rgba(${sev.color.includes('dc')?'220,38,38':sev.color.includes('ef')?'239,68,68':sev.color.includes('f5')?'245,158,11':'16,185,129'},0.08);border:1px solid ${c}33;border-radius:6px;padding:8px 10px;margin-bottom:8px;">
+      <div style="font-size:0.58rem;color:${c};letter-spacing:0.08em;margin-bottom:3px;">⚠️ IMPACT ON PILGRIMS</div>
+      <div style="font-size:0.72rem;color:var(--text);line-height:1.5;">${f.pilgrim_impact}</div>
+    </div>` : '';
+
+  const reasonBlock = f.reasoning ? `
+    <div style="margin-bottom:8px;">
+      <div style="font-size:0.58rem;color:var(--text3);letter-spacing:0.08em;margin-bottom:3px;">🧠 WHY THIS IS A RISK</div>
+      <div style="font-size:0.7rem;color:var(--text2);line-height:1.5;">${f.reasoning}</div>
+    </div>` : '';
+
   return`<div class="finding" id="${cid}-wrap">
     <div class="finding-head" onclick="toggleCard('${cid}')">
-      <div class="finding-sev-bar" style="background:${sev.color}"></div>
+      <div class="finding-sev-bar" style="background:${c}"></div>
       <span class="finding-icon">${icon}</span>
       <span class="finding-name">${f.name}</span>
-      <span class="finding-sev" style="background:${sev.color}22;color:${sev.color};">${sev.label}</span>
+      <span class="finding-sev" style="background:${c}22;color:${c};">${sev.label}</span>
       <span class="finding-conf">${f.confidence}%</span>
       <span class="finding-chevron" id="${cid}-chev">▼</span>
     </div>
     <div class="finding-body" id="${cid}">
       <div class="ev-card">
-        ${locBlock}
+        ${whereBlock}
         ${objectBlock}
-        <div class="ev-label evidence">👁 VISUAL EVIDENCE — What AI observed in photo</div>
-        <div class="ev-text">${f.visual_evidence||'No visual evidence provided.'}</div>
+        ${evidenceBlock}
         ${impactBlock}
-        <div class="ev-label reasoning">🧠 INSPECTOR REASONING</div>
-        <div class="ev-text">${f.reasoning||'No reasoning provided.'}</div>
+        ${reasonBlock}
         <div class="conf-row">
           <span class="conf-label">AI CONFIDENCE</span>
-          <div class="conf-track"><div class="conf-fill" style="width:${f.confidence}%;background:${sev.color}"></div></div>
-          <span class="conf-val" style="color:${sev.color}">${f.confidence}%</span>
+          <div class="conf-track"><div class="conf-fill" style="width:${f.confidence}%;background:${c}"></div></div>
+          <span class="conf-val" style="color:${c}">${f.confidence}%</span>
         </div>
       </div>
     </div>
@@ -1413,6 +1502,108 @@ function findingCard(f,isPositive=false){
 function toggleCard(id){const body=document.getElementById(id);const chev=document.getElementById(id+'-chev');const open=body.classList.toggle('open');chev.classList.toggle('open',open);}
 function closePopup(){document.getElementById('popOvl').classList.remove('show');}
 document.getElementById('popOvl').addEventListener('click',e=>{if(e.target===e.currentTarget)closePopup();});
+
+// ── SCENARIO SIMULATOR ─────────────────────────────────────────
+const SCENARIOS = [
+  {
+    id:'current',
+    label:'📍 Current Situation',
+    desc:'Conditions as observed in this photo — pre-event baseline',
+    crowdMult: 1,
+    widthFactor: 1,
+    rain: false,
+    color: '#00d4ff'
+  },
+  {
+    id:'peak',
+    label:'👥 Kumbh Peak Crowd',
+    desc:'Normal Kumbh crowd surge — estimated 10x current pedestrian density, no weather change',
+    crowdMult: 10,
+    widthFactor: 0.85, // minor congestion narrows effective movement space
+    rain: false,
+    color: '#f59e0b'
+  },
+  {
+    id:'worst',
+    label:'⛈ Worst Case — Peak + Barricades + Rain',
+    desc:'Peak crowd + temporary barricades reducing width by 30% + wet/slippery conditions',
+    crowdMult: 20,
+    widthFactor: 0.7,
+    rain: true,
+    color: '#dc2626'
+  }
+];
+
+function computeScenario(q, flow, scenario){
+  if(!q || !flow) return null;
+  const basePed = q.pedestrian_count || 1;
+  const baseArea = q.net_area_sqm || q.area_estimate_sqm || 100;
+  const simPed = Math.round(basePed * scenario.crowdMult);
+  const simDensity = +(simPed / baseArea).toFixed(2);
+  const simWidth = +(flow.effectiveWidth * scenario.widthFactor).toFixed(1);
+  const simFlow = Math.round(simWidth * SAFE_DESIGN_FLOW_RATE);
+  const losGrade = DENSITY_LOS_BANDS.find(b => simDensity <= b.max) || DENSITY_LOS_BANDS[DENSITY_LOS_BANDS.length-1];
+
+  // Warnings based on scenario conditions
+  const warnings = [];
+  if(simDensity >= 0.72) warnings.push('🚨 Crush risk — density exceeds safe threshold');
+  if(simDensity >= 0.43) warnings.push('⚠️ Restricted flow — pedestrians cannot move freely');
+  if(scenario.rain && (q.zone_type==='ghat'||q.zone_type==='transport'||q.puddle_count>0)) warnings.push('🌧 Rain increases slip/waterlogging risk at this location');
+  if(scenario.widthFactor < 1) warnings.push(`🚧 Barricades reduce effective width to ${simWidth}m`);
+  if(simFlow < 50) warnings.push('🔻 Location becomes a severe bottleneck under these conditions');
+  const bottleneckRisk = simDensity >= 0.43 ? 'HIGH' : simDensity >= 0.27 ? 'MEDIUM' : 'LOW';
+  const stampede = simDensity >= 2.2 ? 'CRITICAL' : simDensity >= 0.72 ? 'HIGH' : simDensity >= 0.43 ? 'MEDIUM' : 'LOW';
+
+  return { simPed, simDensity, simWidth, simFlow, losGrade, warnings, bottleneckRisk, stampede };
+}
+
+function renderScenarioSim(q, flow){
+  const wrap = document.getElementById('quantSimWrap');
+  const container = document.getElementById('simScenarios');
+  if(!wrap || !container || !q) return;
+  if(!flow){ wrap.style.display='none'; return; }
+
+  container.innerHTML = SCENARIOS.map(sc => {
+    const r = computeScenario(q, flow, sc);
+    if(!r) return '';
+    const losColor = r.losGrade.color;
+    return `<div style="border:1px solid ${sc.color}44;border-left:3px solid ${sc.color};border-radius:8px;padding:10px 12px;margin-bottom:10px;background:${sc.color}08;">
+      <div style="font-size:0.72rem;font-weight:700;color:${sc.color};margin-bottom:2px;">${sc.label}</div>
+      <div style="font-size:0.62rem;color:var(--text3);margin-bottom:8px;line-height:1.4;">${sc.desc}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+        <div style="background:var(--panel2);border-radius:6px;padding:6px 8px;">
+          <div style="font-size:0.55rem;color:var(--text3);margin-bottom:2px;">SIMULATED CROWD</div>
+          <div style="font-size:0.78rem;font-weight:700;color:var(--text);">${r.simPed} people</div>
+        </div>
+        <div style="background:var(--panel2);border-radius:6px;padding:6px 8px;">
+          <div style="font-size:0.55rem;color:var(--text3);margin-bottom:2px;">DENSITY</div>
+          <div style="font-size:0.78rem;font-weight:700;color:${losColor};">${r.simDensity} ppl/m²</div>
+        </div>
+        <div style="background:var(--panel2);border-radius:6px;padding:6px 8px;">
+          <div style="font-size:0.55rem;color:var(--text3);margin-bottom:2px;">LOS GRADE</div>
+          <div style="font-size:0.72rem;font-weight:700;color:${losColor};">${r.losGrade.label}</div>
+        </div>
+        <div style="background:var(--panel2);border-radius:6px;padding:6px 8px;">
+          <div style="font-size:0.55rem;color:var(--text3);margin-bottom:2px;">MAX SAFE FLOW</div>
+          <div style="font-size:0.72rem;font-weight:700;color:var(--text);">${r.simFlow} ppl/min</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:${r.warnings.length?'8px':'0'};">
+        <div style="flex:1;background:var(--panel2);border-radius:6px;padding:5px 8px;text-align:center;">
+          <div style="font-size:0.55rem;color:var(--text3);">BOTTLENECK RISK</div>
+          <div style="font-size:0.65rem;font-weight:700;color:${r.bottleneckRisk==='HIGH'?'#dc2626':r.bottleneckRisk==='MEDIUM'?'#f59e0b':'#10b981'};">${r.bottleneckRisk}</div>
+        </div>
+        <div style="flex:1;background:var(--panel2);border-radius:6px;padding:5px 8px;text-align:center;">
+          <div style="font-size:0.55rem;color:var(--text3);">STAMPEDE RISK</div>
+          <div style="font-size:0.65rem;font-weight:700;color:${r.stampede==='CRITICAL'?'#dc2626':r.stampede==='HIGH'?'#ef4444':r.stampede==='MEDIUM'?'#f59e0b':'#10b981'};">${r.stampede}</div>
+        </div>
+      </div>
+      ${r.warnings.length ? `<div style="display:flex;flex-direction:column;gap:3px;">${r.warnings.map(w=>`<div style="font-size:0.62rem;color:var(--text2);background:var(--panel2);border-radius:4px;padding:4px 7px;">${w}</div>`).join('')}</div>` : `<div style="font-size:0.62rem;color:#10b981;">✓ No critical warnings for this scenario</div>`}
+    </div>`;
+  }).join('');
+
+  wrap.style.display='';
+}
 
 // ── ANNOTATION — Pure CSS divs, always inside photo ──────────
 let currentPopupItem = null;
