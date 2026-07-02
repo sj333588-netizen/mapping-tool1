@@ -61,6 +61,11 @@ pilgrim_impact: HOW this endangers Kumbh pilgrims specifically (e.g. "Barefoot p
 
 reasoning: Your official inspector judgment — what you see, why severity is this level, what incident could occur.
 
+public_summary: ONE short plain-language sentence a common pilgrim/citizen (not an engineer) can instantly understand — no technical words, no percentages, no jargon.
+  BAD: "Slippery surface detected with 78% confidence due to standing water"
+  GOOD: "Ground is wet here — watch your step so you don't slip."
+  If severity is NONE, public_summary should be "" (empty).
+
 CONFIDENCE → SEVERITY: 0-50%=NONE | 51-65%=LOW | 66-80%=MEDIUM | 81-92%=HIGH | 93-100%=CRITICAL
 QUADRANT: Where in the photo is this hazard? Choose: top-left | top-center | top-right | middle-left | middle-center | middle-right | bottom-left | bottom-center | bottom-right. Use 'not-visible' ONLY if severity is NONE.
 
@@ -84,11 +89,19 @@ FIXED OBSTACLES (permanent structures that reduce usable walking area):
 - For each one found, estimate its footprint area in sqm (small pole ~0.3, tree trunk ~1, statue/pillar ~5-20 depending on size, kiosk ~10-15).
 - fixed_obstacles: array of {type, area_sqm} — empty array [] if none visible.
 
-PREDICTED RISK (separate from currently-visible hazards — this is about what COULD happen once Kumbh-specific conditions apply, even if nothing is wrong right now):
-- Consider: this road/path will see (a) temporary barricades/crowd-control fencing installed, (b) significantly higher pedestrian volume than today, (c) possible rain/wet conditions.
-- Based on the CURRENT structural characteristics only (road width, presence of fixed obstacles, footpath width, intersection type, zone type) — NOT based on current crowd/weather — judge whether this location is structurally prone to becoming a bottleneck/hazard under those future conditions.
-- predicted_risks: array of objects, each: {condition: short label e.g. "barricade narrowing" / "crowd surge" / "rain waterlogging", likelihood: "low"|"medium"|"high", reasoning: one sentence explaining the structural reason}.
-- Only include a predicted risk if there is a genuine structural reason (e.g. road already narrow + fixed obstacle present = barricade narrowing likely). Empty array [] if the location has no structural concerns for future conditions.
+PREDICTED RISK — "WHAT-IF" EVENT SCENARIO (separate from currently-visible hazards — this is about what COULD happen once Kumbh-specific conditions apply, even if nothing is wrong right now):
+- This is PART 2 of the audit: imagine this exact location during peak Kumbh event day, not as it looks today.
+- Consider ALL of these future-condition categories and evaluate each one against the CURRENT structural characteristics (road width, fixed obstacles, footpath width, intersection type, zone type, existing drainage/lighting/signage clues):
+  1. CROWD SURGE — pedestrian volume could be 10-20x today's count. Will this width/layout bottleneck?
+  2. BARRICADE NARROWING — temporary crowd-control fencing typically eats 1-1.5m of width per side. Does this location have spare width to absorb that?
+  3. RAIN / WATERLOGGING — if it rains during the event, will this surface/drainage situation flood or become slippery, based on current ground material and slope clues?
+  4. NIGHT / LOW-LIGHT — bathing processions often happen pre-dawn. If no lighting infrastructure is visible now, this becomes a fall/trip/crowd-crush risk at night.
+  5. MEDICAL & EMERGENCY ACCESS — if this path narrows under crowd, could ambulances/medical teams still reach people here?
+  6. SANITATION LOAD — near ghats/food zones with no visible waste infrastructure, high footfall can cause garbage/sewage overflow.
+  7. VEHICLE-PEDESTRIAN MIX — if vehicles currently share this space, will that become dangerous once pedestrian volume multiplies?
+- predicted_risks: array of objects, each: {category: one of "crowd_surge"|"barricade_narrowing"|"rain_waterlogging"|"night_lighting"|"medical_access"|"sanitation_load"|"vehicle_conflict", condition: short human label e.g. "Barricade Narrowing", likelihood: "low"|"medium"|"high", reasoning: one sentence explaining the structural reason, mitigation: one short sentence recommending a specific fix (e.g. "Install temporary flood lighting every 20m before event dates")}.
+- Only include a predicted risk if there is a genuine structural reason grounded in what's visible in THIS photo. Do not invent risks with no visual basis. Empty array [] if the location has no structural concerns for future conditions.
+- Aim to evaluate multiple categories per photo where relevant — a thorough audit typically finds 1-4 predicted risks per location, not just one.
 
 ADDITIONAL HARD RULES:
 - CONSTRUCTION SITE: If you see any of the following — excavated/dug-up road, construction debris, sand/gravel piles, yellow construction barriers, metal barricades, road under repair — then: narrow_path=HIGH, broken_barrier=MEDIUM (minimum), walkability="partial" or "no". Do NOT rate construction sites as LOW/CLEAR.
@@ -146,30 +159,30 @@ Respond ONLY with this JSON (no markdown, no extra text):
       "obstruction_present": "yes|no"
     }
   },
-  "slippery": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":""},
-  "waterlogged": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":""},
-  "mud": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":""},
-  "stampede_risk": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":""},
-  "high_crowd_density": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":""},
-  "broken_barrier": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":""},
-  "electric_wire": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":""},
-  "narrow_path": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":""},
-  "bottleneck": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":""},
-  "stairs": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":""},
-  "ghat": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":""},
-  "river_edge": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":""},
-  "barrier": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":""},
-  "approaching_road": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":""},
-  "garbage": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":""},
-  "pothole": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":""},
-  "vehicle_pedestrian_conflict": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":""},
-  "wide_road": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":""},
-  "tree_canopy": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":""},
-  "shade": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":""},
-  "open_space": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":""},
-  "medical_post": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":""},
-  "signage": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":""},
-  "police_presence": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":""},
+  "slippery": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":"","public_summary":""},
+  "waterlogged": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":"","public_summary":""},
+  "mud": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":"","public_summary":""},
+  "stampede_risk": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":"","public_summary":""},
+  "high_crowd_density": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":"","public_summary":""},
+  "broken_barrier": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":"","public_summary":""},
+  "electric_wire": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":"","public_summary":""},
+  "narrow_path": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":"","public_summary":""},
+  "bottleneck": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":"","public_summary":""},
+  "stairs": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":"","public_summary":""},
+  "ghat": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":"","public_summary":""},
+  "river_edge": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":"","public_summary":""},
+  "barrier": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":"","public_summary":""},
+  "approaching_road": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":"","public_summary":""},
+  "garbage": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":"","public_summary":""},
+  "pothole": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":"","public_summary":""},
+  "vehicle_pedestrian_conflict": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":"","public_summary":""},
+  "wide_road": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":"","public_summary":""},
+  "tree_canopy": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":"","public_summary":""},
+  "shade": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":"","public_summary":""},
+  "open_space": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":"","public_summary":""},
+  "medical_post": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":"","public_summary":""},
+  "signage": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":"","public_summary":""},
+  "police_presence": {"severity":"NONE","confidence":0,"detected_object":"","visual_evidence":"","pilgrim_impact":"","quadrant":"middle-center","location_in_frame":"","reasoning":"","public_summary":""},
   "scene_summary": "2 sentences: exact location type and overall safety assessment",
   "inspector_note": "one specific actionable directive for authorities",
   "bboxes": {}

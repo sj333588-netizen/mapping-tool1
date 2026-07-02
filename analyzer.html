@@ -188,6 +188,71 @@
     .ev-tag{font-family:'JetBrains Mono',monospace;font-size:0.55rem;font-weight:600;padding:2px 7px;border-radius:4px;display:flex;align-items:center;gap:3px;}
     .ev-verdict{font-size:0.72rem;font-weight:700;padding:7px 10px;border-radius:6px;margin-top:4px;text-align:center;letter-spacing:0.02em;}
 
+    /* ── AUDIT TABS (Part 1: Current Situation / Part 2: Event Scenario) ── */
+    .audit-tabbar{margin:12px 16px 0;display:flex;gap:6px;background:var(--panel2);border:1px solid var(--border2);border-radius:9px;padding:4px;}
+    .audit-tab{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 8px;border:none;border-radius:6px;background:transparent;color:var(--text3);font-family:'Inter',sans-serif;font-weight:600;font-size:0.68rem;cursor:pointer;transition:all 0.18s;letter-spacing:0.01em;}
+    .audit-tab .at-num{font-family:'JetBrains Mono',monospace;font-size:0.55rem;opacity:0.7;}
+    .audit-tab.on{background:linear-gradient(135deg,var(--cyan),#0891b2);color:#0b1220;box-shadow:0 2px 10px rgba(0,212,255,0.35);}
+    .audit-tab.on.tab-scenario{background:linear-gradient(135deg,#a855f7,#7c3aed);box-shadow:0 2px 10px rgba(139,92,246,0.35);}
+    .audit-tab:not(.on):hover{color:var(--text2);background:var(--panel);}
+
+    /* ── TRANSPARENCY TOGGLE ── */
+    .trans-toggle-row{margin:8px 16px 0;display:flex;align-items:center;justify-content:space-between;gap:8px;}
+    .trans-toggle-lbl{font-family:'JetBrains Mono',monospace;font-size:0.55rem;color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;display:flex;align-items:center;gap:5px;}
+    .trans-toggle{display:flex;background:var(--panel2);border:1px solid var(--border2);border-radius:7px;padding:2px;gap:2px;}
+    .trans-btn{padding:5px 10px;border:none;border-radius:5px;background:transparent;color:var(--text3);font-family:'Inter',sans-serif;font-size:0.62rem;font-weight:600;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;gap:4px;}
+    .trans-btn.on{background:var(--cyan);color:#0b1220;}
+
+    .audit-panel{display:none;}
+    .audit-panel.on{display:block;}
+
+    /* ── PUBLIC-MODE SIMPLE FINDING CARD ── */
+    .pub-finding{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;margin-bottom:7px;border:1px solid var(--border2);}
+    .pub-finding .pf-icon{font-size:1.3rem;line-height:1;flex-shrink:0;margin-top:1px;}
+    .pub-finding .pf-body{flex:1;min-width:0;}
+    .pub-finding .pf-name{font-size:0.75rem;font-weight:700;color:var(--text);margin-bottom:2px;}
+    .pub-finding .pf-sentence{font-size:0.7rem;color:var(--text2);line-height:1.45;}
+    .pub-finding .pf-badge{font-family:'JetBrains Mono',monospace;font-size:0.52rem;font-weight:700;padding:2px 7px;border-radius:10px;flex-shrink:0;white-space:nowrap;}
+
+    /* ── INTERACTIVE SCENARIO SIMULATOR ── */
+    .sim-presets{display:flex;gap:5px;margin-bottom:10px;}
+    .sim-preset-btn{flex:1;padding:7px 4px;border-radius:6px;border:1px solid var(--border2);background:var(--panel2);color:var(--text2);font-family:'Inter',sans-serif;font-size:0.62rem;font-weight:600;cursor:pointer;transition:all 0.15s;text-align:center;}
+    .sim-preset-btn:hover{border-color:var(--cyan);color:var(--cyan);}
+    .sim-preset-btn.on{background:var(--cyan-dim);border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 0 1px var(--cyan) inset;}
+    .sim-controls{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;}
+    .sim-ctrl-row{margin-bottom:12px;}
+    .sim-ctrl-row:last-child{margin-bottom:0;}
+    .sim-ctrl-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;}
+    .sim-ctrl-lbl{font-size:0.65rem;color:var(--text2);font-weight:600;display:flex;align-items:center;gap:5px;}
+    .sim-ctrl-val{font-family:'JetBrains Mono',monospace;font-size:0.68rem;font-weight:700;color:var(--cyan);}
+    .sim-ctrl-row input[type=range]{width:100%;accent-color:var(--cyan);height:4px;cursor:pointer;}
+    .sim-rain-row{display:flex;align-items:center;justify-content:space-between;}
+    .sim-rain-toggle{position:relative;width:38px;height:21px;cursor:pointer;flex-shrink:0;}
+    .sim-rain-toggle input{opacity:0;width:0;height:0;position:absolute;}
+    .sim-rain-bar{position:absolute;inset:0;background:var(--border2);border-radius:11px;transition:background 0.2s;}
+    .sim-rain-bar::before{content:'';position:absolute;width:15px;height:15px;left:3px;top:3px;background:var(--text3);border-radius:50%;transition:all 0.2s;}
+    .sim-rain-toggle input:checked ~ .sim-rain-bar{background:#0ea5e9;}
+    .sim-rain-toggle input:checked ~ .sim-rain-bar::before{transform:translateX(17px);background:#fff;}
+    .sim-live-card{border:1px solid var(--border2);border-radius:10px;padding:12px;background:var(--panel2);transition:border-color 0.25s,background 0.25s;}
+    .sim-live-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0;}
+    .sim-live-cell{background:var(--panel);border-radius:6px;padding:7px 8px;}
+    .sim-live-cell .slk{font-size:0.53rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:2px;}
+    .sim-live-cell .slv{font-family:'JetBrains Mono',monospace;font-size:0.85rem;font-weight:700;}
+    .sim-risk-strip{display:flex;gap:6px;margin-top:6px;}
+    .sim-risk-pill{flex:1;text-align:center;background:var(--panel);border-radius:6px;padding:6px 4px;}
+    .sim-risk-pill .srk{font-size:0.53rem;color:var(--text3);}
+    .sim-risk-pill .srv{font-size:0.68rem;font-weight:700;margin-top:2px;}
+    .sim-warn-list{margin-top:8px;display:flex;flex-direction:column;gap:4px;}
+    .sim-warn-item{font-size:0.64rem;color:var(--text2);background:var(--panel);border-radius:5px;padding:5px 8px;}
+
+    /* PREDICTED RISK CARD (Part 2) */
+    .pred-card{border-radius:0 8px 8px 0;padding:8px 10px;margin-bottom:7px;}
+    .pred-head{display:flex;align-items:center;gap:6px;margin-bottom:2px;}
+    .pred-lk{font-size:0.62rem;font-weight:700;}
+    .pred-cond{font-size:0.7rem;color:var(--text);font-weight:600;}
+    .pred-reason{font-size:0.64rem;color:var(--text2);line-height:1.4;margin-top:2px;}
+    .pred-mitig{font-size:0.62rem;color:var(--green);line-height:1.4;margin-top:4px;display:flex;gap:4px;align-items:flex-start;}
+
     /* QUANTIFICATION CARD */
     .quant-card{margin:10px 16px 0;background:var(--panel2);border:1px solid var(--border2);border-radius:8px;overflow:hidden;}
     .quant-head{display:flex;align-items:center;justify-content:space-between;padding:7px 12px;border-bottom:1px solid var(--border);}
@@ -551,6 +616,28 @@
 
     <div class="pop-meta" id="popMeta"></div>
 
+    <!-- AUDIT TAB BAR — Part 1 vs Part 2, matches the two-part field audit process -->
+    <div class="audit-tabbar">
+      <button class="audit-tab tab-current on" id="tabBtnCurrent" onclick="switchAuditTab('current')">
+        <span class="at-num">1</span> 🔍 Current Situation
+      </button>
+      <button class="audit-tab tab-scenario" id="tabBtnScenario" onclick="switchAuditTab('scenario')">
+        <span class="at-num">2</span> 🎯 Event Scenario
+      </button>
+    </div>
+
+    <!-- TRANSPARENCY MODE TOGGLE — Inspector (technical) vs Public (plain language) -->
+    <div class="trans-toggle-row">
+      <span class="trans-toggle-lbl">🔎 Transparency</span>
+      <div class="trans-toggle">
+        <button class="trans-btn on" id="transBtnInspector" onclick="setTransparency('inspector')">👮 Inspector View</button>
+        <button class="trans-btn" id="transBtnPublic" onclick="setTransparency('public')">👥 Public View</button>
+      </div>
+    </div>
+
+    <!-- ══════════════ PART 1 — CURRENT SITUATION AUDIT ══════════════ -->
+    <div class="audit-panel on" id="auditPart1">
+
     <!-- QUANTIFICATION CARD -->
     <div class="quant-card" id="quantCard" style="display:none">
       <div class="quant-head">
@@ -583,21 +670,6 @@
         <div id="quantFlowDetail" style="font-size:0.65rem;color:var(--text3);"></div>
         <div id="quantFlowDensity" style="font-size:0.65rem;color:var(--text2);margin-top:3px;"></div>
         <div id="quantFlowWarn" style="display:none;font-size:0.65rem;color:var(--amber);background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:5px;padding:6px 8px;margin-top:6px;"></div>
-      </div>
-
-      <!-- Predicted Risks (Kumbh-scenario, not currently visible) -->
-      <div class="quant-vehicles" id="quantPredictWrap" style="display:none">
-        <div class="qk">🔮 PREDICTED RISKS — UNDER KUMBH CONDITIONS</div>
-        <div style="font-size:0.6rem;color:var(--text3);margin:2px 0 6px;">Structural risk if barricades/crowd surge/rain apply here — not currently visible in this photo</div>
-        <div id="quantPredictList"></div>
-      </div>
-
-      <!-- Scenario Simulator -->
-      <div class="quant-vehicles" id="quantSimWrap" style="display:none">
-        <div class="qk">🎯 KUMBH EVENT SCENARIO SIMULATION</div>
-        <div style="font-size:0.6rem;color:var(--text3);margin:2px 0 8px;">Parametric what-if analysis — 3 scenarios showing how conditions change from current to worst-case Kumbh event</div>
-        <div id="simScenarios"></div>
-        <div style="font-size:0.58rem;color:var(--text3);margin-top:6px;padding-top:6px;border-top:1px solid var(--border);">Based on Fruin LOS standard (1971) · Crowd multipliers are estimates for planning purposes</div>
       </div>
 
       <!-- Footpath -->
@@ -648,6 +720,71 @@
       <div class="inspector-lbl">👮 INSPECTOR RECOMMENDATION</div>
       <div class="inspector-text" id="inspectorText"></div>
     </div>
+
+    </div><!-- /auditPart1 -->
+
+    <!-- ══════════════ PART 2 — EVENT SCENARIO (WHAT-IF) ══════════════ -->
+    <div class="audit-panel" id="auditPart2">
+      <div class="quant-card" style="margin:10px 16px 0;">
+        <div class="quant-head">
+          <div class="quant-title">🎯 Event Scenario — Kumbh "What-If" Imagination</div>
+        </div>
+        <div style="padding:10px 12px;font-size:0.65rem;color:var(--text2);line-height:1.5;border-bottom:1px solid var(--border);">
+          This part imagines this exact spot on peak Kumbh day — not how it looks in the photo today. It combines the location's real structural limits (width, obstacles) with event-day conditions you control below.
+        </div>
+
+        <!-- Predicted Risks -->
+        <div style="padding:10px 12px;" id="quantPredictWrap2">
+          <div class="qk">🔮 STRUCTURAL "WHAT COULD GO WRONG" RISKS</div>
+          <div style="font-size:0.6rem;color:var(--text3);margin:2px 0 8px;">Based on this location's real width/obstacles — what could go wrong once event conditions apply</div>
+          <div id="quantPredictList"></div>
+        </div>
+      </div>
+
+      <!-- Interactive Scenario Simulator -->
+      <div class="quant-card" style="margin:10px 16px 0;">
+        <div class="quant-head">
+          <div class="quant-title">🕹 Interactive Crowd Simulator</div>
+        </div>
+        <div style="padding:12px;">
+          <div style="font-size:0.6rem;color:var(--text3);margin-bottom:10px;">Drag the sliders — simulate any combination of crowd surge, barricades &amp; rain for this exact location</div>
+
+          <div class="sim-presets" id="simPresets"></div>
+
+          <div class="sim-controls">
+            <div class="sim-ctrl-row">
+              <div class="sim-ctrl-head">
+                <span class="sim-ctrl-lbl">👥 Crowd Multiplier</span>
+                <span class="sim-ctrl-val" id="simCrowdVal">1×</span>
+              </div>
+              <input type="range" id="simCrowdSlider" min="1" max="30" step="1" value="1" oninput="onSimSliderChange()"/>
+            </div>
+            <div class="sim-ctrl-row">
+              <div class="sim-ctrl-head">
+                <span class="sim-ctrl-lbl">🚧 Barricade / Width Reduction</span>
+                <span class="sim-ctrl-val" id="simWidthVal">0%</span>
+              </div>
+              <input type="range" id="simWidthSlider" min="0" max="60" step="5" value="0" oninput="onSimSliderChange()"/>
+            </div>
+            <div class="sim-ctrl-row" style="margin-bottom:0;">
+              <div class="sim-rain-row">
+                <span class="sim-ctrl-lbl">🌧 Rain / Wet Conditions</span>
+                <label class="sim-rain-toggle">
+                  <input type="checkbox" id="simRainToggle" onchange="onSimSliderChange()"/>
+                  <span class="sim-rain-bar"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="sim-live-card" id="simLiveCard">
+            <div id="simLiveContent"></div>
+          </div>
+          <div style="font-size:0.56rem;color:var(--text3);margin-top:8px;">Based on Fruin LOS standard (1971) · Estimates for planning purposes only</div>
+        </div>
+      </div>
+    </div><!-- /auditPart2 -->
+
     <div class="pop-close-wrap">
       <button class="pop-close" onclick="closePopup()">Close</button>
     </div>
@@ -1275,21 +1412,28 @@ function showPopup(item){
       netAreaEl.innerHTML = `<span style="color:var(--green);font-size:0.55rem;">Net = Gross (no fixed obstacles)</span>`;
     } else { netAreaEl.textContent = ''; }
 
-    // Predicted Risks
-    const predictWrap = document.getElementById('quantPredictWrap');
+    // Predicted Risks (Part 2 — What-If)
     const predictList = document.getElementById('quantPredictList');
-    if(q.predicted_risks && q.predicted_risks.length > 0){
-      const riskColors = {high:'#dc2626', medium:'#f59e0b', low:'#10b981'};
-      predictList.innerHTML = q.predicted_risks.map(r=>`
-        <div style="border-left:2px solid ${riskColors[r.likelihood]||'#f59e0b'};padding:6px 10px;margin-bottom:6px;background:${riskColors[r.likelihood]||'#f59e0b'}0a;border-radius:0 6px 6px 0;">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
-            <span style="font-size:0.65rem;font-weight:700;color:${riskColors[r.likelihood]||'#f59e0b'};">${r.likelihood?.toUpperCase()||'MEDIUM'}</span>
-            <span style="font-size:0.68rem;color:var(--text);font-weight:600;">${r.condition||''}</span>
-          </div>
-          <div style="font-size:0.65rem;color:var(--text2);line-height:1.4;">${r.reasoning||''}</div>
-        </div>`).join('');
-      predictWrap.style.display='';
-    } else { predictWrap.style.display='none'; }
+    const CAT_ICONS = {crowd_surge:'👥',barricade_narrowing:'🚧',rain_waterlogging:'🌧',night_lighting:'💡',medical_access:'🚑',sanitation_load:'🗑',vehicle_conflict:'🚗'};
+    if(predictList){
+      if(q.predicted_risks && q.predicted_risks.length > 0){
+        const riskColors = {high:'#dc2626', medium:'#f59e0b', low:'#10b981'};
+        predictList.innerHTML = q.predicted_risks.map(r=>{
+          const col = riskColors[r.likelihood]||'#f59e0b';
+          const icon = CAT_ICONS[r.category]||'🔮';
+          return `<div class="pred-card" style="border-left:3px solid ${col};background:${col}0a;">
+            <div class="pred-head">
+              <span class="pred-lk" style="color:${col};">${icon} ${(r.likelihood||'medium').toUpperCase()}</span>
+              <span class="pred-cond">${r.condition||''}</span>
+            </div>
+            <div class="pred-reason">${r.reasoning||''}</div>
+            ${r.mitigation?`<div class="pred-mitig">✅ <span>${r.mitigation}</span></div>`:''}
+          </div>`;
+        }).join('');
+      } else {
+        predictList.innerHTML = `<div style="font-size:0.65rem;color:var(--green);">✓ No structural what-if concerns identified for this location.</div>`;
+      }
+    }
     document.getElementById('quantPed').textContent = q.pedestrian_count ?? '—';
     const pedVerifyEl = document.getElementById('quantPedVerify');
     if(q.pedestrian_count_yolo !== undefined && q.pedestrian_count_yolo !== null){
@@ -1339,8 +1483,8 @@ function showPopup(item){
       flowWrap.style.display='';
     } else flowWrap.style.display='none';
 
-    // Scenario Simulator — 3 scenarios (current / peak / worst case)
-    renderScenarioSim(q, flow);
+    // Interactive Scenario Simulator — user-controlled sliders
+    initScenarioSim(q, flow);
 
     // Footpath
     const footWrap = document.getElementById('quantFootWrap');
@@ -1415,9 +1559,15 @@ function showPopup(item){
     const clear=findings.filter(f=>HAZARD_IDS.includes(f.id)&&f.severity==='NONE');
     fh.textContent=`FIELD AUDIT FINDINGS — ${hazards.length} hazard${hazards.length!==1?'s':''} detected`;
     let html='';
-    if(hazards.length){html+=`<div style="font-family:'JetBrains Mono',monospace;font-size:0.57rem;color:var(--text3);letter-spacing:0.1em;margin-bottom:6px;">⚠ HAZARDS DETECTED</div>`;html+=hazards.map(f=>findingCard(f)).join('');}
-    if(positives.length){html+=`<div style="font-family:'JetBrains Mono',monospace;font-size:0.57rem;color:var(--green);letter-spacing:0.1em;margin:10px 0 6px;">✓ POSITIVE FEATURES</div>`;html+=positives.map(f=>findingCard(f,true)).join('');}
-    if(clear.length){html+=`<div style="font-family:'JetBrains Mono',monospace;font-size:0.57rem;color:var(--text3);letter-spacing:0.1em;margin:10px 0 6px;">✓ CONDITIONS CLEAR (${clear.length})</div>`;html+=clear.map(f=>`<div class="clear-row"><span class="cr-icon">${ICONS[f.id]||'—'}</span><span class="cr-name">${f.name}</span><span class="cr-badge">NOT DETECTED</span></div>`).join('');}
+    if(transparencyMode==='public'){
+      if(hazards.length){html+=`<div style="font-family:'JetBrains Mono',monospace;font-size:0.57rem;color:var(--text3);letter-spacing:0.1em;margin-bottom:8px;">⚠ THINGS TO WATCH OUT FOR</div>`;html+=hazards.map(f=>findingCard(f,false,'public')).join('');}
+      if(positives.length){html+=`<div style="font-family:'JetBrains Mono',monospace;font-size:0.57rem;color:var(--green);letter-spacing:0.1em;margin:10px 0 8px;">✓ GOOD TO KNOW</div>`;html+=positives.map(f=>findingCard(f,true,'public')).join('');}
+      if(!hazards.length){html+=`<div style="color:var(--green);text-align:center;padding:14px;font-size:0.75rem;">✓ This location looks safe — no issues found for pilgrims here.</div>`;}
+    } else {
+      if(hazards.length){html+=`<div style="font-family:'JetBrains Mono',monospace;font-size:0.57rem;color:var(--text3);letter-spacing:0.1em;margin-bottom:6px;">⚠ HAZARDS DETECTED</div>`;html+=hazards.map(f=>findingCard(f)).join('');}
+      if(positives.length){html+=`<div style="font-family:'JetBrains Mono',monospace;font-size:0.57rem;color:var(--green);letter-spacing:0.1em;margin:10px 0 6px;">✓ POSITIVE FEATURES</div>`;html+=positives.map(f=>findingCard(f,true)).join('');}
+      if(clear.length){html+=`<div style="font-family:'JetBrains Mono',monospace;font-size:0.57rem;color:var(--text3);letter-spacing:0.1em;margin:10px 0 6px;">✓ CONDITIONS CLEAR (${clear.length})</div>`;html+=clear.map(f=>`<div class="clear-row"><span class="cr-icon">${ICONS[f.id]||'—'}</span><span class="cr-name">${f.name}</span><span class="cr-badge">NOT DETECTED</span></div>`).join('');}
+    }
     fc.innerHTML=html||`<div style="color:var(--green);text-align:center;padding:16px;font-size:0.75rem;">✓ No hazards detected at this location</div>`;
   } else if(item.status==='error'){fh.textContent='FIELD AUDIT FINDINGS';fc.innerHTML=`<div style="color:var(--red);text-align:center;padding:16px;font-size:0.75rem;">⚠ Audit failed — check API configuration</div>`;}
   else{fh.textContent='FIELD AUDIT FINDINGS';fc.innerHTML=`<div style="color:var(--text3);text-align:center;padding:20px;font-size:0.72rem;">Click "Run Field Audit" to analyze this location</div>`;}
@@ -1437,11 +1587,25 @@ function showPopup(item){
 }
 
 let cardCounter=0;
-function findingCard(f,isPositive=false){
+function findingCard(f,isPositive=false,mode='inspector'){
   const sev=SEV_CONFIG[f.severity]||SEV_CONFIG.NONE;
+  const c = sev.color;
+
+  if(mode==='public'){
+    const sentence = f.public_summary || f.pilgrim_impact || f.visual_evidence || 'No further detail available.';
+    const icon=ICONS[f.id]||'⚠️';
+    return `<div class="pub-finding" style="border-left:3px solid ${c};background:${c}0a;">
+      <span class="pf-icon">${icon}</span>
+      <div class="pf-body">
+        <div class="pf-name">${f.name}</div>
+        <div class="pf-sentence">${sentence}</div>
+      </div>
+      <span class="pf-badge" style="background:${c}22;color:${c};border:1px solid ${c}44;">${sev.label}</span>
+    </div>`;
+  }
+
   const cid=`fc-${++cardCounter}`;
   const icon=ICONS[f.id]||'⚠️';
-  const c = sev.color;
 
   // WHY is this dangerous — structured explanation
   const whereBlock = f.location_in_frame ? `
@@ -1500,39 +1664,35 @@ function findingCard(f,isPositive=false){
   </div>`;
 }
 function toggleCard(id){const body=document.getElementById(id);const chev=document.getElementById(id+'-chev');const open=body.classList.toggle('open');chev.classList.toggle('open',open);}
+
+// ── AUDIT TAB SWITCHER (Part 1: Current Situation / Part 2: Event Scenario) ──
+function switchAuditTab(tab){
+  document.getElementById('auditPart1').classList.toggle('on', tab==='current');
+  document.getElementById('auditPart2').classList.toggle('on', tab==='scenario');
+  document.getElementById('tabBtnCurrent').classList.toggle('on', tab==='current');
+  document.getElementById('tabBtnScenario').classList.toggle('on', tab==='scenario');
+}
+
+// ── TRANSPARENCY MODE (Inspector = technical, Public = plain language) ──
+let transparencyMode = 'inspector';
+function setTransparency(mode){
+  transparencyMode = mode;
+  document.getElementById('transBtnInspector').classList.toggle('on', mode==='inspector');
+  document.getElementById('transBtnPublic').classList.toggle('on', mode==='public');
+  if(currentPopupItem) showPopup(currentPopupItem); // re-render findings in new mode
+}
+
 function closePopup(){document.getElementById('popOvl').classList.remove('show');}
 document.getElementById('popOvl').addEventListener('click',e=>{if(e.target===e.currentTarget)closePopup();});
 
-// ── SCENARIO SIMULATOR ─────────────────────────────────────────
-const SCENARIOS = [
-  {
-    id:'current',
-    label:'📍 Current Situation',
-    desc:'Conditions as observed in this photo — pre-event baseline',
-    crowdMult: 1,
-    widthFactor: 1,
-    rain: false,
-    color: '#00d4ff'
-  },
-  {
-    id:'peak',
-    label:'👥 Kumbh Peak Crowd',
-    desc:'Normal Kumbh crowd surge — estimated 10x current pedestrian density, no weather change',
-    crowdMult: 10,
-    widthFactor: 0.85, // minor congestion narrows effective movement space
-    rain: false,
-    color: '#f59e0b'
-  },
-  {
-    id:'worst',
-    label:'⛈ Worst Case — Peak + Barricades + Rain',
-    desc:'Peak crowd + temporary barricades reducing width by 30% + wet/slippery conditions',
-    crowdMult: 20,
-    widthFactor: 0.7,
-    rain: true,
-    color: '#dc2626'
-  }
+// ── INTERACTIVE SCENARIO SIMULATOR ─────────────────────────────
+// Presets just pre-fill the sliders — user can then drag further from there
+const SIM_PRESETS = [
+  { id:'current', label:'📍 Current', crowdMult:1,  widthPct:0,  rain:false },
+  { id:'peak',    label:'👥 Peak Crowd', crowdMult:10, widthPct:15, rain:false },
+  { id:'worst',   label:'⛈ Worst Case', crowdMult:20, widthPct:30, rain:true }
 ];
+let simQ = null, simFlow = null, activePreset = 'current';
 
 function computeScenario(q, flow, scenario){
   if(!q || !flow) return null;
@@ -1541,68 +1701,89 @@ function computeScenario(q, flow, scenario){
   const simPed = Math.round(basePed * scenario.crowdMult);
   const simDensity = +(simPed / baseArea).toFixed(2);
   const simWidth = +(flow.effectiveWidth * scenario.widthFactor).toFixed(1);
-  const simFlow = Math.round(simWidth * SAFE_DESIGN_FLOW_RATE);
+  const simFlowRate = Math.round(simWidth * SAFE_DESIGN_FLOW_RATE);
   const losGrade = DENSITY_LOS_BANDS.find(b => simDensity <= b.max) || DENSITY_LOS_BANDS[DENSITY_LOS_BANDS.length-1];
 
-  // Warnings based on scenario conditions
   const warnings = [];
   if(simDensity >= 0.72) warnings.push('🚨 Crush risk — density exceeds safe threshold');
   if(simDensity >= 0.43) warnings.push('⚠️ Restricted flow — pedestrians cannot move freely');
   if(scenario.rain && (q.zone_type==='ghat'||q.zone_type==='transport'||q.puddle_count>0)) warnings.push('🌧 Rain increases slip/waterlogging risk at this location');
   if(scenario.widthFactor < 1) warnings.push(`🚧 Barricades reduce effective width to ${simWidth}m`);
-  if(simFlow < 50) warnings.push('🔻 Location becomes a severe bottleneck under these conditions');
+  if(simFlowRate < 50) warnings.push('🔻 Location becomes a severe bottleneck under these conditions');
   const bottleneckRisk = simDensity >= 0.43 ? 'HIGH' : simDensity >= 0.27 ? 'MEDIUM' : 'LOW';
   const stampede = simDensity >= 2.2 ? 'CRITICAL' : simDensity >= 0.72 ? 'HIGH' : simDensity >= 0.43 ? 'MEDIUM' : 'LOW';
 
-  return { simPed, simDensity, simWidth, simFlow, losGrade, warnings, bottleneckRisk, stampede };
+  return { simPed, simDensity, simWidth, simFlow:simFlowRate, losGrade, warnings, bottleneckRisk, stampede };
 }
 
-function renderScenarioSim(q, flow){
-  const wrap = document.getElementById('quantSimWrap');
-  const container = document.getElementById('simScenarios');
-  if(!wrap || !container || !q) return;
-  if(!flow){ wrap.style.display='none'; return; }
+function initScenarioSim(q, flow){
+  simQ = q; simFlow = flow;
+  const presetsEl = document.getElementById('simPresets');
+  if(presetsEl){
+    presetsEl.innerHTML = SIM_PRESETS.map(p=>`<button class="sim-preset-btn ${p.id===activePreset?'on':''}" id="preset-${p.id}" onclick="applySimPreset('${p.id}')">${p.label}</button>`).join('');
+  }
+  applySimPreset(activePreset, true);
+}
 
-  container.innerHTML = SCENARIOS.map(sc => {
-    const r = computeScenario(q, flow, sc);
-    if(!r) return '';
-    const losColor = r.losGrade.color;
-    return `<div style="border:1px solid ${sc.color}44;border-left:3px solid ${sc.color};border-radius:8px;padding:10px 12px;margin-bottom:10px;background:${sc.color}08;">
-      <div style="font-size:0.72rem;font-weight:700;color:${sc.color};margin-bottom:2px;">${sc.label}</div>
-      <div style="font-size:0.62rem;color:var(--text3);margin-bottom:8px;line-height:1.4;">${sc.desc}</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
-        <div style="background:var(--panel2);border-radius:6px;padding:6px 8px;">
-          <div style="font-size:0.55rem;color:var(--text3);margin-bottom:2px;">SIMULATED CROWD</div>
-          <div style="font-size:0.78rem;font-weight:700;color:var(--text);">${r.simPed} people</div>
-        </div>
-        <div style="background:var(--panel2);border-radius:6px;padding:6px 8px;">
-          <div style="font-size:0.55rem;color:var(--text3);margin-bottom:2px;">DENSITY</div>
-          <div style="font-size:0.78rem;font-weight:700;color:${losColor};">${r.simDensity} ppl/m²</div>
-        </div>
-        <div style="background:var(--panel2);border-radius:6px;padding:6px 8px;">
-          <div style="font-size:0.55rem;color:var(--text3);margin-bottom:2px;">LOS GRADE</div>
-          <div style="font-size:0.72rem;font-weight:700;color:${losColor};">${r.losGrade.label}</div>
-        </div>
-        <div style="background:var(--panel2);border-radius:6px;padding:6px 8px;">
-          <div style="font-size:0.55rem;color:var(--text3);margin-bottom:2px;">MAX SAFE FLOW</div>
-          <div style="font-size:0.72rem;font-weight:700;color:var(--text);">${r.simFlow} ppl/min</div>
-        </div>
-      </div>
-      <div style="display:flex;gap:6px;margin-bottom:${r.warnings.length?'8px':'0'};">
-        <div style="flex:1;background:var(--panel2);border-radius:6px;padding:5px 8px;text-align:center;">
-          <div style="font-size:0.55rem;color:var(--text3);">BOTTLENECK RISK</div>
-          <div style="font-size:0.65rem;font-weight:700;color:${r.bottleneckRisk==='HIGH'?'#dc2626':r.bottleneckRisk==='MEDIUM'?'#f59e0b':'#10b981'};">${r.bottleneckRisk}</div>
-        </div>
-        <div style="flex:1;background:var(--panel2);border-radius:6px;padding:5px 8px;text-align:center;">
-          <div style="font-size:0.55rem;color:var(--text3);">STAMPEDE RISK</div>
-          <div style="font-size:0.65rem;font-weight:700;color:${r.stampede==='CRITICAL'?'#dc2626':r.stampede==='HIGH'?'#ef4444':r.stampede==='MEDIUM'?'#f59e0b':'#10b981'};">${r.stampede}</div>
-        </div>
-      </div>
-      ${r.warnings.length ? `<div style="display:flex;flex-direction:column;gap:3px;">${r.warnings.map(w=>`<div style="font-size:0.62rem;color:var(--text2);background:var(--panel2);border-radius:4px;padding:4px 7px;">${w}</div>`).join('')}</div>` : `<div style="font-size:0.62rem;color:#10b981;">✓ No critical warnings for this scenario</div>`}
-    </div>`;
-  }).join('');
+function applySimPreset(id, skipButtonSync){
+  const p = SIM_PRESETS.find(x=>x.id===id) || SIM_PRESETS[0];
+  activePreset = id;
+  document.getElementById('simCrowdSlider').value = p.crowdMult;
+  document.getElementById('simWidthSlider').value = p.widthPct;
+  document.getElementById('simRainToggle').checked = p.rain;
+  if(!skipButtonSync){
+    document.querySelectorAll('.sim-preset-btn').forEach(b=>b.classList.remove('on'));
+    document.getElementById(`preset-${id}`)?.classList.add('on');
+  }
+  onSimSliderChange(true);
+}
 
-  wrap.style.display='';
+function onSimSliderChange(fromPreset){
+  const crowdMult = parseInt(document.getElementById('simCrowdSlider').value);
+  const widthPct  = parseInt(document.getElementById('simWidthSlider').value);
+  const rain      = document.getElementById('simRainToggle').checked;
+  document.getElementById('simCrowdVal').textContent = crowdMult + '×';
+  document.getElementById('simWidthVal').textContent = widthPct + '%';
+
+  // If user manually drags away from the preset's exact values, deselect preset highlight
+  if(!fromPreset){
+    const matched = SIM_PRESETS.find(p=>p.crowdMult===crowdMult && p.widthPct===widthPct && p.rain===rain);
+    document.querySelectorAll('.sim-preset-btn').forEach(b=>b.classList.remove('on'));
+    if(matched) document.getElementById(`preset-${matched.id}`)?.classList.add('on');
+  }
+
+  const content = document.getElementById('simLiveContent');
+  if(!simQ || !simFlow){ if(content) content.innerHTML = `<div style="font-size:0.65rem;color:var(--text3);text-align:center;padding:8px;">Not enough scene data at this location to simulate crowd flow.</div>`; return; }
+  const scenario = { crowdMult, widthFactor: 1 - (widthPct/100), rain };
+  const r = computeScenario(simQ, simFlow, scenario);
+  renderSimLive(r, scenario);
+}
+
+function renderSimLive(r, scenario){
+  const card = document.getElementById('simLiveCard');
+  const content = document.getElementById('simLiveContent');
+  if(!r || !card || !content) return;
+  const losColor = r.losGrade.color;
+  const edgeColor = r.stampede==='CRITICAL'?'#dc2626':r.stampede==='HIGH'?'#ef4444':r.stampede==='MEDIUM'?'#f59e0b':'#10b981';
+  card.style.borderColor = edgeColor+'66';
+  card.style.background = edgeColor+'0a';
+  content.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:0.62rem;color:var(--text3);letter-spacing:0.06em;text-transform:uppercase;">Live Simulation Result</span>
+      ${scenario.rain?'<span style="font-size:0.6rem;color:#0ea5e9;">🌧 Wet conditions active</span>':''}
+    </div>
+    <div class="sim-live-grid">
+      <div class="sim-live-cell"><div class="slk">Simulated Crowd</div><div class="slv" style="color:var(--text);">${r.simPed} people</div></div>
+      <div class="sim-live-cell"><div class="slk">Density</div><div class="slv" style="color:${losColor};">${r.simDensity} ppl/m²</div></div>
+      <div class="sim-live-cell"><div class="slk">LOS Grade</div><div class="slv" style="color:${losColor};font-size:0.7rem;">${r.losGrade.label}</div></div>
+      <div class="sim-live-cell"><div class="slk">Max Safe Flow</div><div class="slv" style="color:var(--text);font-size:0.7rem;">${r.simFlow} ppl/min</div></div>
+    </div>
+    <div class="sim-risk-strip">
+      <div class="sim-risk-pill"><div class="srk">BOTTLENECK RISK</div><div class="srv" style="color:${r.bottleneckRisk==='HIGH'?'#dc2626':r.bottleneckRisk==='MEDIUM'?'#f59e0b':'#10b981'};">${r.bottleneckRisk}</div></div>
+      <div class="sim-risk-pill"><div class="srk">STAMPEDE RISK</div><div class="srv" style="color:${edgeColor};">${r.stampede}</div></div>
+    </div>
+    ${r.warnings.length ? `<div class="sim-warn-list">${r.warnings.map(w=>`<div class="sim-warn-item">${w}</div>`).join('')}</div>` : `<div style="font-size:0.62rem;color:#10b981;margin-top:8px;">✓ No critical warnings for these conditions</div>`}
+  `;
 }
 
 // ── ANNOTATION — Pure CSS divs, always inside photo ──────────
