@@ -24,6 +24,45 @@
       --text:#0f172a;--text2:#475569;--text3:#94a3b8;
     }
     body.light .brand-dot{box-shadow:none;}
+
+    /* ══════════════════════════════════════════════════════════
+       PREMIUM POLISH LAYER — softer cards, subtle depth, pill badges
+       (inspired by modern SaaS dashboards: rounded-xl, soft shadow,
+       generous spacing, bold stat numbers, colored status pills)
+       ══════════════════════════════════════════════════════════ */
+    .kpi,.db-stat,.quant-cell,.c-box,.chip{
+      border-radius:10px !important;
+      transition:transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+    .kpi:hover,.db-stat:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(0,0,0,0.18);border-color:var(--cyan);}
+    body.light .kpi:hover,body.light .db-stat:hover{box-shadow:0 6px 16px rgba(15,23,42,0.08);}
+
+    .quant-card,.ev-summary,.scene-box,.inspector-box,.findings-wrap{
+      border-radius:14px !important;
+      box-shadow:0 4px 20px rgba(0,0,0,0.18);
+    }
+    body.light .quant-card,body.light .ev-summary,body.light .scene-box,body.light .inspector-box,body.light .findings-wrap{
+      box-shadow:0 4px 16px rgba(15,23,42,0.06);
+    }
+    .pop-box{border-radius:18px !important;}
+    .finding,.pub-finding,.pred-card,.sim-live-card,.sim-controls{border-radius:12px !important;}
+    .feed-item{border-radius:10px !important;}
+    .feed-item:hover{transform:translateX(2px);}
+    .feed-item.on{box-shadow:0 2px 10px rgba(0,212,255,0.15);}
+
+    /* Stat-card numbers — bigger, bolder, like a premium metrics dashboard */
+    .kpi .kv{font-size:1.25rem !important;letter-spacing:-0.02em;}
+    .db-stat .dsv{letter-spacing:-0.02em;}
+
+    /* Pill-style status badges everywhere */
+    .finding-sev,.pf-badge,.pred-lk,.trans-btn.on,.audit-tab.on{
+      border-radius:999px !important;
+    }
+    .sim-preset-btn{border-radius:999px !important;}
+    .btn,.act-btn,.nav-btn{border-radius:9px !important;}
+
+    header{backdrop-filter:blur(6px);}
+
     .tog-wrap{display:flex;align-items:center;gap:6px;}
     .tog-lbl{font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--text3);white-space:nowrap;}
     .tog{position:relative;width:34px;height:19px;cursor:pointer;flex-shrink:0;}
