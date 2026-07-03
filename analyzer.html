@@ -845,8 +845,14 @@
           <div style="margin-top:12px;">
             <div style="font-family:'JetBrains Mono',monospace;font-size:0.55rem;color:var(--text3);letter-spacing:0.1em;margin-bottom:6px;">🎬 LIVE CROWD VISUALIZATION — this road, not a generic one</div>
             <div style="position:relative;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);">
-              <canvas id="crowdCanvas" width="520" height="140" style="width:100%;height:auto;display:block;background:#0a0d14;cursor:crosshair;"></canvas>
+              <canvas id="crowdCanvas" width="520" height="140" style="width:100%;height:auto;display:block;background:#0a0d14;"></canvas>
               <div id="crowdLosLabel" style="position:absolute;top:6px;right:8px;font-family:'JetBrains Mono',monospace;font-size:0.6rem;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(0,0,0,0.7);"></div>
+              <!-- Dedicated hit-testing layer, separate from the <canvas> — some
+                   mobile browsers are unreliable delivering pointer/click events
+                   directly on a CSS-scaled <canvas>. A plain div on top always
+                   receives taps correctly. -->
+              <div id="crowdCanvasOverlay" style="position:absolute;inset:0;cursor:crosshair;"></div>
+              <div id="hurdleToast" style="display:none;position:absolute;left:50%;top:8px;transform:translateX(-50%);background:rgba(15,20,30,0.92);color:#fff;font-size:0.65rem;font-weight:600;padding:4px 10px;border-radius:999px;pointer-events:none;white-space:nowrap;"></div>
             </div>
             <div style="font-size:0.55rem;color:var(--text3);margin-top:4px;text-align:center;">Each figure = 1 pilgrim · Speed reflects actual LOS crowd flow rate</div>
 
@@ -1999,17 +2005,27 @@ function removeManualHurdleAt(i){
 
 let lastHurdleTapAt = 0;
 function bindCanvasClickOnce(){
-  const canvas = document.getElementById('crowdCanvas');
-  if(!canvas || canvasClickBound) return;
-  canvas.style.touchAction = 'none';
-  // Bind pointerup as the primary handler (fires reliably on tap-release across
-  // touch + mouse + pen, and — unlike 'click' — isn't silently swallowed if the
-  // browser decided a touch was "scrolling"). 'click' is kept as a fallback for
-  // any older/embedded webview without full Pointer Events support; a short
-  // debounce stops the same tap being counted twice on devices that fire both.
-  canvas.addEventListener('pointerup', onCrowdCanvasClick);
-  canvas.addEventListener('click', onCrowdCanvasClick);
+  const overlay = document.getElementById('crowdCanvasOverlay');
+  if(!overlay || canvasClickBound) return;
+  overlay.style.touchAction = 'none';
+  // Bound on the transparent overlay div (not the <canvas> itself) — canvas
+  // elements are unreliable for receiving touch/pointer events on some mobile
+  // browsers once CSS-scaled. pointerup is primary (fires on tap-release,
+  // cancels itself automatically if the browser decided it was a scroll);
+  // click stays as a fallback for older webviews. Debounced so one tap never
+  // double-counts.
+  overlay.addEventListener('pointerup', onCrowdCanvasClick);
+  overlay.addEventListener('click', onCrowdCanvasClick);
   canvasClickBound = true;
+}
+function showHurdleToast(msg, isError){
+  const t = document.getElementById('hurdleToast');
+  if(!t) return;
+  t.textContent = msg;
+  t.style.background = isError ? 'rgba(220,38,38,0.92)' : 'rgba(15,20,30,0.92)';
+  t.style.display = '';
+  clearTimeout(t._hideTimer);
+  t._hideTimer = setTimeout(()=>{ t.style.display='none'; }, 1100);
 }
 function tapRipple(canvas, cx, cy){
   const ctx = canvas.getContext('2d');
@@ -2023,28 +2039,37 @@ function onCrowdCanvasClick(evt){
   if(now - lastHurdleTapAt < 250) return; // debounce duplicate pointerup+click on same tap
   lastHurdleTapAt = now;
   evt.preventDefault();
-  const canvas = evt.currentTarget;
-  const rect = canvas.getBoundingClientRect();
+  const canvas = document.getElementById('crowdCanvas');
+  const overlay = evt.currentTarget;
+  const rect = overlay.getBoundingClientRect();
   if(!rect.width || !rect.height) return;
   const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
   const cx = (evt.clientX - rect.left) * scaleX;
   const cy = (evt.clientY - rect.top) * scaleY;
-  tapRipple(canvas, cx, cy); // instant feedback so a tap is never "silent"
+  tapRipple(canvas, cx, cy); // instant visual confirmation the tap was received
 
   // tapping an already-placed hurdle removes it (generous hit radius for fingers)
   const hitIdx = manualHurdles.findIndex(h => Math.hypot(h.px-cx, h.py-cy) < 20);
-  if(hitIdx>-1){ manualHurdles.splice(hitIdx,1); renderManualHurdleSummary(); onSimSliderChange(); return; }
+  if(hitIdx>-1){
+    const cfg = HURDLE_TYPES.find(x=>x.id===manualHurdles[hitIdx].type)||{};
+    manualHurdles.splice(hitIdx,1); renderManualHurdleSummary(); onSimSliderChange();
+    showHurdleToast(`${cfg.icon||''} ${cfg.label||'Obstacle'} removed`);
+    return;
+  }
 
   if(!activeHurdleTool){
     // no tool selected — flash a hint instead of silently doing nothing
     const lbl = document.querySelector('.hurdle-palette-lbl');
     if(lbl){ lbl.style.color = 'var(--red)'; setTimeout(()=>{ lbl.style.color=''; }, 600); }
+    showHurdleToast('Pick a type below first', true);
     return;
   }
-  if(manualHurdles.length >= 8) return;
+  if(manualHurdles.length >= 8){ showHurdleToast('Max 8 obstacles on one road', true); return; }
   manualHurdles.push({ type:activeHurdleTool, px:cx, py:cy });
   renderManualHurdleSummary();
   onSimSliderChange();
+  const cfg = HURDLE_TYPES.find(x=>x.id===activeHurdleTool)||{};
+  showHurdleToast(`${cfg.icon||''} ${cfg.label||'Obstacle'} placed`);
 }
 
 // Presets just pre-fill the sliders — user can then drag further from there
