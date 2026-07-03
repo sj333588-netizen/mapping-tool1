@@ -315,12 +315,12 @@
     .sim-warn-item{font-size:0.66rem;color:var(--text2);background:var(--panel);border-radius:7px;padding:7px 10px;line-height:1.4;}
 
     /* PREDICTED RISK CARD (Part 2) */
-    .pred-card{border-radius:0 8px 8px 0;padding:8px 10px;margin-bottom:7px;}
-    .pred-head{display:flex;align-items:center;gap:6px;margin-bottom:2px;}
-    .pred-lk{font-size:0.62rem;font-weight:700;}
-    .pred-cond{font-size:0.7rem;color:var(--text);font-weight:600;}
-    .pred-reason{font-size:0.64rem;color:var(--text2);line-height:1.4;margin-top:2px;}
-    .pred-mitig{font-size:0.62rem;color:var(--green);line-height:1.4;margin-top:4px;display:flex;gap:4px;align-items:flex-start;}
+    .pred-card{border-radius:11px;padding:12px 13px;margin-bottom:9px;background:var(--panel);border:1px solid var(--border2);}
+    .pred-head{display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap;}
+    .pred-lk{font-size:0.6rem;font-weight:700;padding:2px 9px;border-radius:999px;white-space:nowrap;}
+    .pred-cond{font-size:0.76rem;color:var(--text);font-weight:600;}
+    .pred-reason{font-size:0.68rem;color:var(--text2);line-height:1.5;}
+    .pred-mitig{font-size:0.66rem;color:var(--green);line-height:1.5;margin-top:6px;display:flex;gap:5px;align-items:flex-start;}
 
     /* QUANTIFICATION CARD */
     .quant-card{margin:10px 16px 0;background:var(--panel2);border:1px solid var(--border2);border-radius:8px;overflow:hidden;}
@@ -695,15 +695,6 @@
       </button>
     </div>
 
-    <!-- TRANSPARENCY MODE TOGGLE — Inspector (technical) vs Public (plain language) -->
-    <div class="trans-toggle-row">
-      <span class="trans-toggle-lbl">🔎 Transparency</span>
-      <div class="trans-toggle">
-        <button class="trans-btn on" id="transBtnInspector" onclick="setTransparency('inspector')">👮 Inspector View</button>
-        <button class="trans-btn" id="transBtnPublic" onclick="setTransparency('public')">👥 Public View</button>
-      </div>
-    </div>
-
     <!-- ══════════════ PART 1 — CURRENT SITUATION AUDIT ══════════════ -->
     <div class="audit-panel on" id="auditPart1">
 
@@ -803,7 +794,7 @@
         </div>
 
         <!-- Predicted Risks -->
-        <div style="padding:10px 12px;" id="quantPredictWrap2">
+        <div style="padding:14px 14px 6px;" id="quantPredictWrap2">
           <div class="qk">🔮 STRUCTURAL "WHAT COULD GO WRONG" RISKS</div>
           <div style="font-size:0.6rem;color:var(--text3);margin:2px 0 8px;">Based on this location's real width/obstacles — what could go wrong once event conditions apply</div>
           <div id="quantPredictList"></div>
@@ -1520,10 +1511,10 @@ function showPopup(item){
         predictList.innerHTML = q.predicted_risks.map(r=>{
           const col = riskColors[r.likelihood]||'#f59e0b';
           const icon = CAT_ICONS[r.category]||'🔮';
-          return `<div class="pred-card" style="border-left:3px solid ${col};background:${col}0a;">
+          return `<div class="pred-card">
             <div class="pred-head">
-              <span class="pred-lk" style="color:${col};">${icon} ${(r.likelihood||'medium').toUpperCase()}</span>
-              <span class="pred-cond">${r.condition||''}</span>
+              <span class="pred-lk" style="background:${col}22;color:${col};">${(r.likelihood||'medium').toUpperCase()}</span>
+              <span class="pred-cond">${icon} ${r.condition||''}</span>
             </div>
             <div class="pred-reason">${r.reasoning||''}</div>
             ${r.mitigation?`<div class="pred-mitig">✅ <span>${r.mitigation}</span></div>`:''}
@@ -1809,14 +1800,11 @@ function updateScenarioTabAvailability(item){
   if(label) label.textContent = '';
 }
 
-// ── TRANSPARENCY MODE (Inspector = technical, Public = plain language) ──
-let transparencyMode = 'inspector';
-function setTransparency(mode){
-  transparencyMode = mode;
-  document.getElementById('transBtnInspector').classList.toggle('on', mode==='inspector');
-  document.getElementById('transBtnPublic').classList.toggle('on', mode==='public');
-  if(currentPopupItem) showPopup(currentPopupItem); // re-render findings in new mode
-}
+// ── FINDINGS DISPLAY MODE — simplified to one clean, plain-language view ──
+// (Inspector/Public toggle removed: both showed the same info, just an
+// unnecessary extra control. Public/plain-language wording is kept since
+// it's clearer for showing non-technical people like a professor/evaluator.)
+const transparencyMode = 'public';
 
 function closePopup(){document.getElementById('popOvl').classList.remove('show');}
 document.getElementById('popOvl').addEventListener('click',e=>{if(e.target===e.currentTarget)closePopup();});
@@ -1842,12 +1830,19 @@ function drawHurdleShape(ctx, x, y, kind, color){
   ctx.save();
   switch(kind){
     case 'vehicle':
-      ctx.fillStyle = color||'#ef4444';
+      ctx.fillStyle = color || '#64748b';
       ctx.beginPath();
-      if(ctx.roundRect) ctx.roundRect(x-9,y-5,18,10,2); else ctx.rect(x-9,y-5,18,10);
+      if(ctx.roundRect) ctx.roundRect(x-10,y-6,20,12,3); else ctx.rect(x-10,y-6,20,12);
       ctx.fill();
-      ctx.fillStyle='#0a0d14'; ctx.globalAlpha=0.5;
-      ctx.fillRect(x-6,y-5,4,4); ctx.fillRect(x+2,y-5,4,4);
+      // windshield band
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.beginPath();
+      if(ctx.roundRect) ctx.roundRect(x-5,y-5.5,10,4.5,1.5); else ctx.rect(x-5,y-5.5,10,4.5);
+      ctx.fill();
+      // wheels
+      ctx.fillStyle = '#0a0d14';
+      ctx.beginPath(); ctx.arc(x-6.5,y+6.5,2,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x+6.5,y+6.5,2,0,Math.PI*2); ctx.fill();
       break;
     case 'pothole':
       ctx.fillStyle='#000'; ctx.globalAlpha=0.65;
@@ -2002,23 +1997,39 @@ function removeManualHurdleAt(i){
   onSimSliderChange();
 }
 
+let lastHurdleTapAt = 0;
 function bindCanvasClickOnce(){
   const canvas = document.getElementById('crowdCanvas');
   if(!canvas || canvasClickBound) return;
-  // pointerdown (not click) — click gets silently swallowed on mobile the moment
-  // a tap includes even a 1-2px scroll/drag, which is extremely common inside a
-  // scrolling popup. pointerdown fires immediately and reliably on touch + mouse.
   canvas.style.touchAction = 'none';
-  canvas.addEventListener('pointerdown', onCrowdCanvasClick);
+  // Bind pointerup as the primary handler (fires reliably on tap-release across
+  // touch + mouse + pen, and — unlike 'click' — isn't silently swallowed if the
+  // browser decided a touch was "scrolling"). 'click' is kept as a fallback for
+  // any older/embedded webview without full Pointer Events support; a short
+  // debounce stops the same tap being counted twice on devices that fire both.
+  canvas.addEventListener('pointerup', onCrowdCanvasClick);
+  canvas.addEventListener('click', onCrowdCanvasClick);
   canvasClickBound = true;
 }
+function tapRipple(canvas, cx, cy){
+  const ctx = canvas.getContext('2d');
+  ctx.save();
+  ctx.strokeStyle = '#ffffffaa'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI*2); ctx.stroke();
+  ctx.restore();
+}
 function onCrowdCanvasClick(evt){
+  const now = Date.now();
+  if(now - lastHurdleTapAt < 250) return; // debounce duplicate pointerup+click on same tap
+  lastHurdleTapAt = now;
   evt.preventDefault();
   const canvas = evt.currentTarget;
   const rect = canvas.getBoundingClientRect();
+  if(!rect.width || !rect.height) return;
   const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
   const cx = (evt.clientX - rect.left) * scaleX;
   const cy = (evt.clientY - rect.top) * scaleY;
+  tapRipple(canvas, cx, cy); // instant feedback so a tap is never "silent"
 
   // tapping an already-placed hurdle removes it (generous hit radius for fingers)
   const hitIdx = manualHurdles.findIndex(h => Math.hypot(h.px-cx, h.py-cy) < 20);
