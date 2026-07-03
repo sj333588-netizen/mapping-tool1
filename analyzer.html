@@ -238,21 +238,30 @@
     .sim-error-box .seb-icon{font-size:1.4rem;display:block;margin-bottom:6px;}
 
     /* ── EXISTING HURDLES (auto-detected from this photo) ── */
-    .existing-hurdles-lbl{font-family:'JetBrains Mono',monospace;font-size:0.53rem;color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;}
-    .existing-hurdle-chips{display:flex;flex-wrap:wrap;gap:5px;}
-    .eh-chip{display:flex;align-items:center;gap:4px;background:var(--panel2);border:1px solid var(--border2);border-radius:999px;padding:3px 9px;font-size:0.6rem;color:var(--text2);}
-    .eh-chip b{color:var(--text);}
+    .hurdle-section{margin-top:14px;}
+    .hurdle-section-title{font-size:0.68rem;font-weight:600;color:var(--text2);margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+    .existing-hurdle-chips{display:flex;flex-wrap:wrap;gap:6px;}
+    .eh-chip{display:flex;align-items:center;gap:5px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:5px 10px 5px 8px;font-size:0.65rem;color:var(--text2);}
+    .eh-chip .eh-count{color:var(--text);font-weight:700;}
 
     /* ── INTERACTIVE HURDLE PALETTE ── */
-    .hurdle-palette-wrap{margin-top:10px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:9px 10px;}
-    .hurdle-palette-lbl{font-size:0.6rem;color:var(--text2);margin-bottom:7px;}
-    .hurdle-palette{display:flex;flex-wrap:wrap;gap:6px;}
-    .hurdle-btn{display:flex;align-items:center;gap:5px;padding:6px 10px;border-radius:999px;border:1px solid var(--border2);background:var(--bg);color:var(--text2);font-size:0.62rem;font-weight:600;cursor:pointer;transition:all 0.15s;}
-    .hurdle-btn:hover{border-color:var(--cyan);color:var(--cyan);}
-    .hurdle-btn.active{background:var(--cyan);color:#0b1220;border-color:var(--cyan);}
-    .hurdle-btn.clear-btn{margin-left:auto;background:transparent;color:var(--red);border-color:var(--red);opacity:0.85;}
-    .hurdle-btn.clear-btn:hover{opacity:1;}
-    .manual-hurdle-summary{margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:0.62rem;color:var(--amber);}
+    .hurdle-palette-wrap{margin-top:12px;background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:12px;}
+    .hurdle-palette-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;}
+    .hurdle-palette-lbl{font-size:0.66rem;color:var(--text2);font-weight:600;}
+    .hurdle-palette-sub{font-size:0.58rem;color:var(--text3);margin-top:1px;}
+    .hurdle-clear-icon{width:28px;height:28px;flex-shrink:0;border-radius:8px;border:1px solid var(--border2);background:var(--panel);color:var(--text3);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.75rem;transition:all .15s;}
+    .hurdle-clear-icon:hover{color:var(--red);border-color:var(--red);}
+    .hurdle-palette{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;}
+    .hurdle-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:10px 4px;border-radius:10px;border:1px solid var(--border2);background:var(--panel);color:var(--text2);font-size:0.6rem;font-weight:600;cursor:pointer;transition:all 0.15s;}
+    .hurdle-btn .hb-icon{font-size:1.15rem;line-height:1;}
+    .hurdle-btn:hover{border-color:var(--text3);color:var(--text);}
+    .hurdle-btn.active{background:linear-gradient(135deg,#a855f7,#7c3aed);border-color:transparent;color:#fff;box-shadow:0 2px 8px rgba(139,92,246,0.35);}
+    .manual-hurdle-summary{margin-top:12px;padding-top:12px;border-top:1px solid var(--border);}
+    .mh-chips{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px;}
+    .mh-chip{display:flex;align-items:center;gap:5px;background:var(--panel);border:1px solid var(--border2);border-radius:999px;padding:4px 6px 4px 10px;font-size:0.62rem;color:var(--text2);}
+    .mh-chip button{border:none;background:var(--border2);color:var(--text3);cursor:pointer;font-size:0.6rem;line-height:1;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;}
+    .mh-chip button:hover{background:var(--red);color:#fff;}
+    .mh-note{font-size:0.6rem;color:var(--text3);}
 
     .audit-tab:not(.on):hover{color:var(--text2);background:var(--panel);}
 
@@ -293,17 +302,17 @@
     .sim-rain-bar::before{content:'';position:absolute;width:15px;height:15px;left:3px;top:3px;background:var(--text3);border-radius:50%;transition:all 0.2s;}
     .sim-rain-toggle input:checked ~ .sim-rain-bar{background:#0ea5e9;}
     .sim-rain-toggle input:checked ~ .sim-rain-bar::before{transform:translateX(17px);background:#fff;}
-    .sim-live-card{border:1px solid var(--border2);border-radius:10px;padding:12px;background:var(--panel2);transition:border-color 0.25s,background 0.25s;}
-    .sim-live-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0;}
-    .sim-live-cell{background:var(--panel);border-radius:6px;padding:7px 8px;}
-    .sim-live-cell .slk{font-size:0.53rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:2px;}
-    .sim-live-cell .slv{font-family:'JetBrains Mono',monospace;font-size:0.85rem;font-weight:700;}
-    .sim-risk-strip{display:flex;gap:6px;margin-top:6px;}
-    .sim-risk-pill{flex:1;text-align:center;background:var(--panel);border-radius:6px;padding:6px 4px;}
-    .sim-risk-pill .srk{font-size:0.53rem;color:var(--text3);}
-    .sim-risk-pill .srv{font-size:0.68rem;font-weight:700;margin-top:2px;}
-    .sim-warn-list{margin-top:8px;display:flex;flex-direction:column;gap:4px;}
-    .sim-warn-item{font-size:0.64rem;color:var(--text2);background:var(--panel);border-radius:5px;padding:5px 8px;}
+    .sim-live-card{border:1px solid var(--border2);border-radius:12px;padding:14px;background:var(--panel2);transition:border-color 0.25s,background 0.25s;}
+    .sim-live-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0;}
+    .sim-live-cell{background:var(--panel);border-radius:9px;padding:9px 10px;}
+    .sim-live-cell .slk{font-size:0.6rem;color:var(--text3);margin-bottom:3px;}
+    .sim-live-cell .slv{font-size:0.92rem;font-weight:700;}
+    .sim-risk-strip{display:flex;gap:8px;margin-top:8px;}
+    .sim-risk-pill{flex:1;text-align:center;background:var(--panel);border-radius:9px;padding:8px 4px;}
+    .sim-risk-pill .srk{font-size:0.58rem;color:var(--text3);}
+    .sim-risk-pill .srv{font-size:0.72rem;font-weight:700;margin-top:3px;}
+    .sim-warn-list{margin-top:10px;display:flex;flex-direction:column;gap:5px;}
+    .sim-warn-item{font-size:0.66rem;color:var(--text2);background:var(--panel);border-radius:7px;padding:7px 10px;line-height:1.4;}
 
     /* PREDICTED RISK CARD (Part 2) */
     .pred-card{border-radius:0 8px 8px 0;padding:8px 10px;margin-bottom:7px;}
@@ -851,11 +860,17 @@
             <div style="font-size:0.55rem;color:var(--text3);margin-top:4px;text-align:center;">Each figure = 1 pilgrim · Speed reflects actual LOS crowd flow rate</div>
 
             <!-- Existing hurdles auto-detected from THIS photo -->
-            <div id="existingHurdlesInfo" style="margin-top:8px;"></div>
+            <div class="hurdle-section" id="existingHurdlesInfo"></div>
 
             <!-- Interactive "what if we add more obstacles" palette -->
             <div class="hurdle-palette-wrap">
-              <div class="hurdle-palette-lbl">🧩 Add hurdles yourself — click a type, then tap the road above to place it</div>
+              <div class="hurdle-palette-top">
+                <div>
+                  <div class="hurdle-palette-lbl">Add obstacles to this road</div>
+                  <div class="hurdle-palette-sub">Pick a type, then tap the road above to drop it in</div>
+                </div>
+                <button class="hurdle-clear-icon" onclick="clearManualHurdles()" title="Clear added obstacles">🗑</button>
+              </div>
               <div class="hurdle-palette" id="hurdlePalette"></div>
               <div id="manualHurdleSummary" class="manual-hurdle-summary" style="display:none;"></div>
             </div>
@@ -1940,24 +1955,23 @@ function buildExistingHurdles(q, findings, seedBase){
 function renderExistingHurdlesInfo(){
   const el = document.getElementById('existingHurdlesInfo');
   if(!el) return;
-  if(!existingHurdles.length){ el.innerHTML = `<div class="existing-hurdles-lbl">✓ No fixed obstacles/vehicles detected blocking this specific road in the photo</div>`; return; }
+  if(!existingHurdles.length){ el.innerHTML = `<div class="hurdle-section-title">✓ No fixed obstacles or vehicles detected blocking this road</div>`; return; }
   const shown = {};
   existingHurdles.forEach(h=>{ shown[h.label] = (shown[h.label]||0)+1; });
   const trueCounts = existingHurdles._trueCounts || {};
-  el.innerHTML = `<div class="existing-hurdles-lbl">📸 Existing hurdles detected on THIS road (already factored into width/area above)</div>
+  el.innerHTML = `<div class="hurdle-section-title">Already on this road <span style="color:var(--text3);font-weight:400;">— factored into the width/area above</span></div>
     <div class="existing-hurdle-chips">${Object.entries(shown).map(([label,n])=>{
       const h = existingHurdles.find(x=>x.label===label);
       const trueN = trueCounts[label] ?? n;
-      const capped = trueN > n ? ` <span style="opacity:0.65">(${n} shown)</span>` : '';
-      return `<span class="eh-chip">${h.icon} <b>${trueN}×</b> ${label}${capped}</span>`;
+      const capped = trueN > n ? ` <span style="opacity:0.6">(${n} shown)</span>` : '';
+      return `<span class="eh-chip">${h.icon} ${label} <span class="eh-count">×${trueN}</span>${capped}</span>`;
     }).join('')}</div>`;
 }
 
 function renderHurdlePalette(){
   const el = document.getElementById('hurdlePalette');
   if(!el) return;
-  el.innerHTML = HURDLE_TYPES.map(h=>`<button class="hurdle-btn ${activeHurdleTool===h.id?'active':''}" onclick="selectHurdleTool('${h.id}')">${h.icon} ${h.label}</button>`).join('')
-    + `<button class="hurdle-btn clear-btn" onclick="clearManualHurdles()">🗑 Clear added</button>`;
+  el.innerHTML = HURDLE_TYPES.map(h=>`<button class="hurdle-btn ${activeHurdleTool===h.id?'active':''}" onclick="selectHurdleTool('${h.id}')"><span class="hb-icon">${h.icon}</span>${h.label}</button>`).join('');
 }
 function selectHurdleTool(id){
   activeHurdleTool = (activeHurdleTool===id) ? null : id;
@@ -1979,30 +1993,44 @@ function renderManualHurdleSummary(){
   if(!manualHurdles.length){ el.style.display='none'; return; }
   el.style.display='';
   const pct = getManualHurdlePct();
-  const counts={};
-  manualHurdles.forEach(h=>{counts[h.type]=(counts[h.type]||0)+1;});
-  const parts = Object.entries(counts).map(([t,n])=>{ const cfg=HURDLE_TYPES.find(x=>x.id===t); return `${cfg.icon} ${n}× ${cfg.label}`; }).join(' · ');
-  el.innerHTML = `🧩 You added: ${parts} — reduces usable width by an extra ${pct}% · tap a placed icon again to remove it`;
+  el.innerHTML = `<div class="mh-chips">${manualHurdles.map((h,i)=>{ const cfg=HURDLE_TYPES.find(x=>x.id===h.type)||{}; return `<span class="mh-chip">${cfg.icon} ${cfg.label}<button onclick="removeManualHurdleAt(${i})" title="Remove">✕</button></span>`; }).join('')}</div>
+    <div class="mh-note">Together these narrow the usable width by an extra ${pct}% · tap an icon on the road, or the ✕ here, to remove it</div>`;
+}
+function removeManualHurdleAt(i){
+  manualHurdles.splice(i,1);
+  renderManualHurdleSummary();
+  onSimSliderChange();
 }
 
 function bindCanvasClickOnce(){
   const canvas = document.getElementById('crowdCanvas');
   if(!canvas || canvasClickBound) return;
-  canvas.addEventListener('click', onCrowdCanvasClick);
+  // pointerdown (not click) — click gets silently swallowed on mobile the moment
+  // a tap includes even a 1-2px scroll/drag, which is extremely common inside a
+  // scrolling popup. pointerdown fires immediately and reliably on touch + mouse.
+  canvas.style.touchAction = 'none';
+  canvas.addEventListener('pointerdown', onCrowdCanvasClick);
   canvasClickBound = true;
 }
 function onCrowdCanvasClick(evt){
+  evt.preventDefault();
   const canvas = evt.currentTarget;
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
   const cx = (evt.clientX - rect.left) * scaleX;
   const cy = (evt.clientY - rect.top) * scaleY;
 
-  // tapping an already-placed hurdle removes it
-  const hitIdx = manualHurdles.findIndex(h => Math.hypot(h.px-cx, h.py-cy) < 14);
+  // tapping an already-placed hurdle removes it (generous hit radius for fingers)
+  const hitIdx = manualHurdles.findIndex(h => Math.hypot(h.px-cx, h.py-cy) < 20);
   if(hitIdx>-1){ manualHurdles.splice(hitIdx,1); renderManualHurdleSummary(); onSimSliderChange(); return; }
 
-  if(!activeHurdleTool || manualHurdles.length >= 8) return;
+  if(!activeHurdleTool){
+    // no tool selected — flash a hint instead of silently doing nothing
+    const lbl = document.querySelector('.hurdle-palette-lbl');
+    if(lbl){ lbl.style.color = 'var(--red)'; setTimeout(()=>{ lbl.style.color=''; }, 600); }
+    return;
+  }
+  if(manualHurdles.length >= 8) return;
   manualHurdles.push({ type:activeHurdleTool, px:cx, py:cy });
   renderManualHurdleSummary();
   onSimSliderChange();
@@ -2322,22 +2350,26 @@ function updateCrowdCanvas(r, scenario){
           sepX += dx / (d+0.1) * 0.4;
         }
       });
-      // Nudge around real hurdles (existing + user-placed) — light, visual-only avoidance
+      // Nudge around real hurdles (existing + user-placed) — strength ramps up to
+      // 100% right at the obstacle's edge and fades out over the influence radius,
+      // and is scaled by speedScale so the detour is actually visible (not sub-pixel).
       avoidPoints.forEach(hp=>{
         const dx = f.x - hp.x, dy = f.y - hp.y;
         const d = Math.sqrt(dx*dx+dy*dy);
-        if(d < hp.r + 12){
-          sepX += dx/(d+0.1) * 0.25;
-          sepY += dy/(d+0.1) * 0.6;
+        const influenceR = hp.r + 20;
+        if(d < influenceR){
+          const strength = 1 - d/influenceR;
+          sepX += (dx/(d+0.1)) * strength * 1.4;
+          sepY += (dy/(d+0.1)) * strength * 2.0;
         }
       });
 
       // Speed — reduced by local crowding (separation forces indicate congestion)
-      const crowdingFactor = Math.max(0, 1 - Math.abs(sepX)*0.8);
+      const crowdingFactor = Math.max(0.15, 1 - Math.min(1, Math.abs(sepX))*0.6);
       const fSpeed = baseSpeed * crowdingFactor * speedScale;
 
-      f.x += (fSpeed + sepX * 0.5) * dt;
-      f.y += (Math.sin(t*0.4 + f.wobble)*0.2 + sepY) * dt; // gentle vertical drift + hurdle avoidance
+      f.x += (fSpeed + sepX * speedScale * 0.4) * dt;
+      f.y += (Math.sin(t*0.4 + f.wobble)*3 + sepY * speedScale * 0.55) * dt; // gentle drift + real hurdle avoidance
       f.y = Math.max(roadTop+8, Math.min(roadTop+roadH-8, f.y));
 
       // Wrap around
