@@ -845,7 +845,7 @@
           <div style="margin-top:12px;">
             <div style="font-family:'JetBrains Mono',monospace;font-size:0.55rem;color:var(--text3);letter-spacing:0.1em;margin-bottom:6px;">🎬 LIVE CROWD VISUALIZATION — this road, not a generic one</div>
             <div style="position:relative;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);">
-              <canvas id="crowdCanvas" width="520" height="140" style="width:100%;height:auto;display:block;background:#0a0d14;"></canvas>
+              <canvas id="crowdCanvas" width="520" height="190" style="width:100%;height:auto;display:block;background:#0a0d14;"></canvas>
               <div id="crowdLosLabel" style="position:absolute;top:6px;right:8px;font-family:'JetBrains Mono',monospace;font-size:0.6rem;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(0,0,0,0.7);"></div>
               <!-- Dedicated hit-testing layer, separate from the <canvas> — some
                    mobile browsers are unreliable delivering pointer/click events
@@ -2058,11 +2058,12 @@ function onCrowdCanvasClick(evt){
   }
 
   if(!activeHurdleTool){
-    // no tool selected — flash a hint instead of silently doing nothing
-    const lbl = document.querySelector('.hurdle-palette-lbl');
-    if(lbl){ lbl.style.color = 'var(--red)'; setTimeout(()=>{ lbl.style.color=''; }, 600); }
-    showHurdleToast('Pick a type below first', true);
-    return;
+    // No type picked yet — rather than silently doing nothing (which reads as
+    // "tapping isn't working"), default to the first type so the tap always
+    // places something, and sync the palette so the person can see/change
+    // which type is now active for their next tap.
+    activeHurdleTool = HURDLE_TYPES[0].id;
+    renderHurdlePalette();
   }
   if(manualHurdles.length >= 8){ showHurdleToast('Max 8 obstacles on one road', true); return; }
   manualHurdles.push({ type:activeHurdleTool, px:cx, py:cy });
@@ -2306,7 +2307,13 @@ function updateCrowdCanvas(r, scenario){
     } else {
       const fx = h.xFrac!=null ? h.xFrac : (0.08 + seededRand(h.seed*3.1)*0.84);
       h._px = fx*W;
-      h._py = h.side==='edge' ? ((idx%2===0)?roadTop-9:roadTop+roadH+9) : (roadTop+10+seededRand(h.seed*7.7)*Math.max(1,roadH-20));
+      // Keep "edge" hurdles (parked vehicles) safely centred inside the footpath
+      // strip — never touching the road line or the canvas' rounded corners.
+      const footpathH = roadTop; // height of each footpath strip (top === bottom by construction)
+      const edgeMargin = Math.min(14, Math.max(6, footpathH * 0.35));
+      const topEdgeY = Math.max(edgeMargin, footpathH * 0.5);
+      const botEdgeY = Math.min(H - edgeMargin, roadTop + roadH + footpathH * 0.5);
+      h._py = h.side==='edge' ? ((idx%2===0)?topEdgeY:botEdgeY) : (roadTop+10+seededRand(h.seed*7.7)*Math.max(1,roadH-20));
     }
   });
   const avoidPoints = [...existingHurdles.map(h=>({x:h._px,y:h._py,r:15})), ...manualHurdles.map(h=>({x:h.px,y:h.py,r:16}))];
