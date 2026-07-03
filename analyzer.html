@@ -213,7 +213,7 @@
     /* POPUP */
     .pop-ovl{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:16px;}
     .pop-ovl.show{display:flex;}
-    .pop-box{background:var(--panel);border:1px solid var(--border2);border-radius:12px;width:100%;max-width:580px;max-height:88vh;overflow-y:auto;overflow-x:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.7);flex-shrink:0;}
+    .pop-box{background:var(--panel);border:1px solid var(--border2);border-radius:12px;width:100%;max-width:760px;max-height:94vh;overflow-y:auto;overflow-x:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.7);flex-shrink:0;}
     .pop-box::-webkit-scrollbar{width:3px;}
     .pop-box::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
 
@@ -233,6 +233,27 @@
     .audit-tab .at-num{font-family:'JetBrains Mono',monospace;font-size:0.55rem;opacity:0.7;}
     .audit-tab.on{background:linear-gradient(135deg,var(--cyan),#0891b2);color:#0b1220;box-shadow:0 2px 10px rgba(0,212,255,0.35);}
     .audit-tab.on.tab-scenario{background:linear-gradient(135deg,#a855f7,#7c3aed);box-shadow:0 2px 10px rgba(139,92,246,0.35);}
+    .audit-tab.disabled{opacity:0.4;cursor:not-allowed;pointer-events:none;}
+    .sim-error-box{background:var(--panel2);border:1px dashed var(--border2);border-radius:10px;padding:16px 14px;text-align:center;color:var(--text2);font-size:0.68rem;line-height:1.5;}
+    .sim-error-box .seb-icon{font-size:1.4rem;display:block;margin-bottom:6px;}
+
+    /* ── EXISTING HURDLES (auto-detected from this photo) ── */
+    .existing-hurdles-lbl{font-family:'JetBrains Mono',monospace;font-size:0.53rem;color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;}
+    .existing-hurdle-chips{display:flex;flex-wrap:wrap;gap:5px;}
+    .eh-chip{display:flex;align-items:center;gap:4px;background:var(--panel2);border:1px solid var(--border2);border-radius:999px;padding:3px 9px;font-size:0.6rem;color:var(--text2);}
+    .eh-chip b{color:var(--text);}
+
+    /* ── INTERACTIVE HURDLE PALETTE ── */
+    .hurdle-palette-wrap{margin-top:10px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:9px 10px;}
+    .hurdle-palette-lbl{font-size:0.6rem;color:var(--text2);margin-bottom:7px;}
+    .hurdle-palette{display:flex;flex-wrap:wrap;gap:6px;}
+    .hurdle-btn{display:flex;align-items:center;gap:5px;padding:6px 10px;border-radius:999px;border:1px solid var(--border2);background:var(--bg);color:var(--text2);font-size:0.62rem;font-weight:600;cursor:pointer;transition:all 0.15s;}
+    .hurdle-btn:hover{border-color:var(--cyan);color:var(--cyan);}
+    .hurdle-btn.active{background:var(--cyan);color:#0b1220;border-color:var(--cyan);}
+    .hurdle-btn.clear-btn{margin-left:auto;background:transparent;color:var(--red);border-color:var(--red);opacity:0.85;}
+    .hurdle-btn.clear-btn:hover{opacity:1;}
+    .manual-hurdle-summary{margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:0.62rem;color:var(--amber);}
+
     .audit-tab:not(.on):hover{color:var(--text2);background:var(--panel);}
 
     /* ── TRANSPARENCY TOGGLE ── */
@@ -822,12 +843,22 @@
 
           <!-- ANIMATED CROWD VISUALIZER -->
           <div style="margin-top:12px;">
-            <div style="font-family:'JetBrains Mono',monospace;font-size:0.55rem;color:var(--text3);letter-spacing:0.1em;margin-bottom:6px;">🎬 LIVE CROWD VISUALIZATION</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:0.55rem;color:var(--text3);letter-spacing:0.1em;margin-bottom:6px;">🎬 LIVE CROWD VISUALIZATION — this road, not a generic one</div>
             <div style="position:relative;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);">
-              <canvas id="crowdCanvas" width="520" height="140" style="width:100%;height:auto;display:block;background:#0a0d14;"></canvas>
+              <canvas id="crowdCanvas" width="520" height="140" style="width:100%;height:auto;display:block;background:#0a0d14;cursor:crosshair;"></canvas>
               <div id="crowdLosLabel" style="position:absolute;top:6px;right:8px;font-family:'JetBrains Mono',monospace;font-size:0.6rem;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(0,0,0,0.7);"></div>
             </div>
             <div style="font-size:0.55rem;color:var(--text3);margin-top:4px;text-align:center;">Each figure = 1 pilgrim · Speed reflects actual LOS crowd flow rate</div>
+
+            <!-- Existing hurdles auto-detected from THIS photo -->
+            <div id="existingHurdlesInfo" style="margin-top:8px;"></div>
+
+            <!-- Interactive "what if we add more obstacles" palette -->
+            <div class="hurdle-palette-wrap">
+              <div class="hurdle-palette-lbl">🧩 Add hurdles yourself — click a type, then tap the road above to place it</div>
+              <div class="hurdle-palette" id="hurdlePalette"></div>
+              <div id="manualHurdleSummary" class="manual-hurdle-summary" style="display:none;"></div>
+            </div>
           </div>
 
           <div style="font-size:0.56rem;color:var(--text3);margin-top:8px;">Based on Fruin LOS standard (1971) · Estimates for planning purposes only</div>
@@ -1408,6 +1439,9 @@ function showPopup(item){
   if(item.aiData?.overall_risk){const c=riskColor(item.aiData.overall_risk);chip.textContent=item.aiData.overall_risk+' RISK';chip.style.cssText=`background:${c}22;color:${c};border:1px solid ${c}55;`;chip.style.display='';}
   else chip.style.display='none';
 
+  // Event Scenario tab availability — disable when AI audit failed or hasn't run
+  updateScenarioTabAvailability(item);
+
   // PHOTO ANNOTATION — show hazard + where in photo
   const tagsEl=document.getElementById('popPhotoTags');
   if(tagsEl && item.aiData){
@@ -1534,7 +1568,7 @@ function showPopup(item){
     } else flowWrap.style.display='none';
 
     // Interactive Scenario Simulator — user-controlled sliders
-    initScenarioSim(q, flow);
+    initScenarioSim(q, flow, item.aiData.findings);
 
     // Footpath
     const footWrap = document.getElementById('quantFootWrap');
@@ -1723,6 +1757,43 @@ function switchAuditTab(tab){
   document.getElementById('tabBtnScenario').classList.toggle('on', tab==='scenario');
 }
 
+// Gate the "Event Scenario" tab on whether this photo actually has usable AI audit data.
+// Groq failure / pending audit → tab disabled + clear, honest message instead of a blank/broken simulator.
+function updateScenarioTabAvailability(item){
+  const tabBtn = document.getElementById('tabBtnScenario');
+  if(!tabBtn) return;
+  const hasAI = !!(item.status==='done' && item.aiData && item.aiData.quantification);
+  const failed = item.status==='error';
+
+  if(hasAI){
+    tabBtn.classList.remove('disabled');
+    tabBtn.title = '';
+    return;
+  }
+
+  // No usable data — disable tab, force back to Current Situation, stop any stale animation
+  tabBtn.classList.add('disabled');
+  tabBtn.title = failed ? 'AI audit failed for this photo — no data to simulate' : 'Waiting for AI audit to complete';
+  switchAuditTab('current');
+
+  if(crowdAnimFrame){ cancelAnimationFrame(crowdAnimFrame); crowdAnimFrame = null; }
+  crowdFigures = [];
+  simQ = null; simFlow = null;
+
+  const msg = failed
+    ? `<div class="sim-error-box"><span class="seb-icon">⚠️</span><b>AI audit failed for this photo</b><br/>Groq couldn't analyze this image (API error / timeout), so there's no width, crowd, or obstacle data to simulate a scenario from.<br/><br/>Re-run the audit for this photo — Event Scenario will unlock once it completes.</div>`
+    : `<div class="sim-error-box"><span class="seb-icon">⏳</span><b>Audit not run yet</b><br/>This photo hasn't been analyzed by AI. Run the audit first to unlock Event Scenario simulation.</div>`;
+
+  const predictList = document.getElementById('quantPredictList');
+  if(predictList) predictList.innerHTML = msg;
+  const simLiveContent = document.getElementById('simLiveContent');
+  if(simLiveContent) simLiveContent.innerHTML = msg;
+  const canvas = document.getElementById('crowdCanvas');
+  if(canvas){ const ctx = canvas.getContext('2d'); ctx.fillStyle = '#0a0d14'; ctx.fillRect(0,0,canvas.width,canvas.height); }
+  const label = document.getElementById('crowdLosLabel');
+  if(label) label.textContent = '';
+}
+
 // ── TRANSPARENCY MODE (Inspector = technical, Public = plain language) ──
 let transparencyMode = 'inspector';
 function setTransparency(mode){
@@ -1736,6 +1807,126 @@ function closePopup(){document.getElementById('popOvl').classList.remove('show')
 document.getElementById('popOvl').addEventListener('click',e=>{if(e.target===e.currentTarget)closePopup();});
 
 // ── INTERACTIVE SCENARIO SIMULATOR ─────────────────────────────
+// ── ROAD HURDLES — existing (from AI photo data) + manually placed by user ──
+const HURDLE_TYPES = [
+  { id:'barricade', icon:'🚧', label:'Barricade',   widthImpact:10, color:'#f59e0b' },
+  { id:'tree',      icon:'🌳', label:'Tree',         widthImpact:6,  color:'#22c55e' },
+  { id:'stall',     icon:'🏪', label:'Stall / Shop', widthImpact:14, color:'#a855f7' },
+  { id:'pole',      icon:'🚦', label:'Pole / Pillar', widthImpact:4,  color:'#38bdf8' }
+];
+let existingHurdles = [];   // auto-detected from THIS photo's AI data — static, not removable
+let manualHurdles = [];     // user-placed "what if I add this" hurdles — click to remove
+let activeHurdleTool = null;
+let canvasClickBound = false;
+
+function seededRand(seed){ const x = Math.sin(seed*12.9898)*43758.5453; return x - Math.floor(x); }
+
+// Map a hazard's quadrant (top-left, middle-center, etc.) — actual AI-observed
+// location in THIS photo — to a position on the diagram, so real hazards land
+// roughly where they really are instead of at a random spot.
+function quadrantToPixel(quadrant, W, roadTop, roadH){
+  const parts = (quadrant||'middle-center').split('-');
+  const vert = parts[0]||'middle', horiz = parts[1]||'center';
+  const xMap = {left:0.18, center:0.5, right:0.82};
+  const px = (xMap[horiz]??0.5) * W;
+  let py;
+  if(vert==='top') py = roadTop - 9;
+  else if(vert==='bottom') py = roadTop + roadH + 9;
+  else py = roadTop + roadH*0.5;
+  return {px, py};
+}
+
+function buildExistingHurdles(q, findings){
+  const hurdles = [];
+  findings = findings || [];
+  const findQuad = (id) => { const f = findings.find(x=>x.id===id && x.severity!=='NONE'); return f ? f.quadrant : null; };
+
+  const vehCount = Math.min(q.vehicle_count||0, 6);
+  const vehQuad = findQuad('vehicle_pedestrian_conflict');
+  for(let i=0;i<vehCount;i++) hurdles.push({icon:'🚗', label:'Parked vehicle', side:'edge', seed:i+1, quadrant: i===0?vehQuad:null});
+
+  const potholeCount = Math.min(q.pothole_count||0, 5);
+  const potholeQuad = findQuad('pothole');
+  for(let i=0;i<potholeCount;i++) hurdles.push({icon:'🕳️', label:'Pothole', side:'road', seed:i+11, quadrant: i===0?potholeQuad:null});
+
+  const iconMap = {tree:'🌳', pole:'🚦', bollard:'🚧', kiosk:'🏪', statue:'🗿', pillar:'🏛️', bench:'🪑', 'electrical box':'⚡', well:'⛲'};
+  const treeQuad = findQuad('tree_canopy');
+  (q.fixed_obstacles||[]).slice(0,6).forEach((o,i)=>{
+    const icon = iconMap[(o.type||'').toLowerCase()] || '📍';
+    const isTree = (o.type||'').toLowerCase()==='tree';
+    hurdles.push({icon, label:o.type||'Fixed obstacle', side:'road', seed:i+21, quadrant: (isTree && i===0) ? treeQuad : null});
+  });
+  return hurdles;
+}
+
+function renderExistingHurdlesInfo(){
+  const el = document.getElementById('existingHurdlesInfo');
+  if(!el) return;
+  if(!existingHurdles.length){ el.innerHTML = `<div class="existing-hurdles-lbl">✓ No fixed obstacles/vehicles detected blocking this specific road in the photo</div>`; return; }
+  const counts = {};
+  existingHurdles.forEach(h=>{ counts[h.label] = (counts[h.label]||0)+1; });
+  el.innerHTML = `<div class="existing-hurdles-lbl">📸 Existing hurdles detected on THIS road (already factored into width/area above)</div>
+    <div class="existing-hurdle-chips">${Object.entries(counts).map(([label,n])=>{
+      const h = existingHurdles.find(x=>x.label===label);
+      return `<span class="eh-chip">${h.icon} <b>${n}×</b> ${label}</span>`;
+    }).join('')}</div>`;
+}
+
+function renderHurdlePalette(){
+  const el = document.getElementById('hurdlePalette');
+  if(!el) return;
+  el.innerHTML = HURDLE_TYPES.map(h=>`<button class="hurdle-btn ${activeHurdleTool===h.id?'active':''}" onclick="selectHurdleTool('${h.id}')">${h.icon} ${h.label}</button>`).join('')
+    + `<button class="hurdle-btn clear-btn" onclick="clearManualHurdles()">🗑 Clear added</button>`;
+}
+function selectHurdleTool(id){
+  activeHurdleTool = (activeHurdleTool===id) ? null : id;
+  renderHurdlePalette();
+}
+function clearManualHurdles(){
+  manualHurdles = [];
+  renderManualHurdleSummary();
+  onSimSliderChange();
+}
+function getManualHurdlePct(){
+  let pct = 0;
+  manualHurdles.forEach(h=>{ const cfg = HURDLE_TYPES.find(x=>x.id===h.type); pct += cfg ? cfg.widthImpact : 0; });
+  return Math.min(60, pct);
+}
+function renderManualHurdleSummary(){
+  const el = document.getElementById('manualHurdleSummary');
+  if(!el) return;
+  if(!manualHurdles.length){ el.style.display='none'; return; }
+  el.style.display='';
+  const pct = getManualHurdlePct();
+  const counts={};
+  manualHurdles.forEach(h=>{counts[h.type]=(counts[h.type]||0)+1;});
+  const parts = Object.entries(counts).map(([t,n])=>{ const cfg=HURDLE_TYPES.find(x=>x.id===t); return `${cfg.icon} ${n}× ${cfg.label}`; }).join(' · ');
+  el.innerHTML = `🧩 You added: ${parts} — reduces usable width by an extra ${pct}% · tap a placed icon again to remove it`;
+}
+
+function bindCanvasClickOnce(){
+  const canvas = document.getElementById('crowdCanvas');
+  if(!canvas || canvasClickBound) return;
+  canvas.addEventListener('click', onCrowdCanvasClick);
+  canvasClickBound = true;
+}
+function onCrowdCanvasClick(evt){
+  const canvas = evt.currentTarget;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
+  const cx = (evt.clientX - rect.left) * scaleX;
+  const cy = (evt.clientY - rect.top) * scaleY;
+
+  // tapping an already-placed hurdle removes it
+  const hitIdx = manualHurdles.findIndex(h => Math.hypot(h.px-cx, h.py-cy) < 14);
+  if(hitIdx>-1){ manualHurdles.splice(hitIdx,1); renderManualHurdleSummary(); onSimSliderChange(); return; }
+
+  if(!activeHurdleTool || manualHurdles.length >= 8) return;
+  manualHurdles.push({ type:activeHurdleTool, px:cx, py:cy });
+  renderManualHurdleSummary();
+  onSimSliderChange();
+}
+
 // Presets just pre-fill the sliders — user can then drag further from there
 const SIM_PRESETS = [
   { id:'current', label:'📍 Current', crowdMult:1,  widthPct:0,  rain:false },
@@ -1759,6 +1950,7 @@ function computeScenario(q, flow, scenario){
   if(simDensity >= 0.43) warnings.push('⚠️ Restricted flow — pedestrians cannot move freely');
   if(scenario.rain && (q.zone_type==='ghat'||q.zone_type==='transport'||q.puddle_count>0)) warnings.push('🌧 Rain increases slip/waterlogging risk at this location');
   if(scenario.widthFactor < 1) warnings.push(`🚧 Barricades reduce effective width to ${simWidth}m`);
+  if(scenario.manualPct>0) warnings.push(`🧩 Hurdles you added further reduce width by ${scenario.manualPct}%`);
   if(simFlowRate < 50) warnings.push('🔻 Location becomes a severe bottleneck under these conditions');
   const bottleneckRisk = simDensity >= 0.43 ? 'HIGH' : simDensity >= 0.27 ? 'MEDIUM' : 'LOW';
   const stampede = simDensity >= 2.2 ? 'CRITICAL' : simDensity >= 0.72 ? 'HIGH' : simDensity >= 0.43 ? 'MEDIUM' : 'LOW';
@@ -1766,13 +1958,33 @@ function computeScenario(q, flow, scenario){
   return { simPed, simDensity, simWidth, simFlow:simFlowRate, losGrade, warnings, bottleneckRisk, stampede };
 }
 
-function initScenarioSim(q, flow){
+function initScenarioSim(q, flow, findings){
   simQ = q; simFlow = flow;
+  existingHurdles = buildExistingHurdles(q, findings);
+  manualHurdles = [];
+  activeHurdleTool = null;
+  renderExistingHurdlesInfo();
+  renderHurdlePalette();
+  renderManualHurdleSummary();
+  bindCanvasClickOnce();
+  loadSceneBackground();
   const presetsEl = document.getElementById('simPresets');
   if(presetsEl){
     presetsEl.innerHTML = SIM_PRESETS.map(p=>`<button class="sim-preset-btn ${p.id===activePreset?'on':''}" id="preset-${p.id}" onclick="applySimPreset('${p.id}')">${p.label}</button>`).join('');
   }
   applySimPreset(activePreset, true);
+}
+
+// Load the actual field photo as a dimmed backdrop for the scene diagram —
+// makes it visually obvious this is THIS road, not a generic template.
+let sceneBgImg = null, sceneBgLoadedFor = null;
+function loadSceneBackground(){
+  if(!currentPopupItem || !currentPopupItem.imgData){ sceneBgImg = null; sceneBgLoadedFor = null; return; }
+  if(sceneBgLoadedFor === currentPopupItem.id && sceneBgImg) return;
+  sceneBgImg = null;
+  const img = new Image();
+  img.onload = () => { sceneBgImg = img; sceneBgLoadedFor = currentPopupItem.id; };
+  img.src = currentPopupItem.imgData;
 }
 
 function applySimPreset(id, skipButtonSync){
@@ -1792,8 +2004,9 @@ function onSimSliderChange(fromPreset){
   const crowdMult = parseInt(document.getElementById('simCrowdSlider').value);
   const widthPct  = parseInt(document.getElementById('simWidthSlider').value);
   const rain      = document.getElementById('simRainToggle').checked;
+  const manualPct = getManualHurdlePct();
   document.getElementById('simCrowdVal').textContent = crowdMult + '×';
-  document.getElementById('simWidthVal').textContent = widthPct + '%';
+  document.getElementById('simWidthVal').textContent = manualPct>0 ? `${widthPct}% + ${manualPct}% added` : widthPct + '%';
 
   // If user manually drags away from the preset's exact values, deselect preset highlight
   if(!fromPreset){
@@ -1804,7 +2017,8 @@ function onSimSliderChange(fromPreset){
 
   const content = document.getElementById('simLiveContent');
   if(!simQ || !simFlow){ if(content) content.innerHTML = `<div style="font-size:0.65rem;color:var(--text3);text-align:center;padding:8px;">Not enough scene data at this location to simulate crowd flow.</div>`; return; }
-  const scenario = { crowdMult, widthFactor: 1 - (widthPct/100), rain };
+  const totalWidthPct = Math.min(90, widthPct + manualPct);
+  const scenario = { crowdMult, widthFactor: 1 - (totalWidthPct/100), rain, manualPct, sliderPct:widthPct };
   const r = computeScenario(simQ, simFlow, scenario);
   renderSimLive(r, scenario);
 }
@@ -1951,6 +2165,20 @@ function updateCrowdCanvas(r, scenario){
     label.style.border = '1px solid';
   }
 
+  // Precompute existing-hurdle pixel positions (stable per widthFactor, avoids per-frame recompute)
+  // Where AI actually observed a hazard's quadrant in THIS photo, use that real position.
+  existingHurdles.forEach((h,idx)=>{
+    if(h.quadrant){
+      const p = quadrantToPixel(h.quadrant, W, roadTop, roadH);
+      h._px = p.px; h._py = p.py;
+    } else {
+      const fx = 0.08 + seededRand(h.seed*3.1)*0.84;
+      h._px = fx*W;
+      h._py = h.side==='edge' ? ((idx%2===0)?roadTop-9:roadTop+roadH+9) : (roadTop+10+seededRand(h.seed*7.7)*Math.max(1,roadH-20));
+    }
+  });
+  const avoidPoints = [...existingHurdles.map(h=>({x:h._px,y:h._py,r:15})), ...manualHurdles.map(h=>({x:h.px,y:h.py,r:16}))];
+
   let lastT = null;
   function frame(ts){
     if(!lastT) lastT = ts;
@@ -1958,17 +2186,28 @@ function updateCrowdCanvas(r, scenario){
     lastT = ts;
     const t = ts/1000;
 
-    // Background — road scene
+    // Background — dimmed actual field photo of THIS road, with the diagram overlaid on top
     ctx.fillStyle = '#0a0d14';
     ctx.fillRect(0, 0, W, H);
+    if(sceneBgImg){
+      ctx.save();
+      ctx.globalAlpha = 0.32;
+      const ir = sceneBgImg.width/sceneBgImg.height, cr = W/H;
+      let dw,dh,dx,dy;
+      if(ir>cr){ dh=H; dw=H*ir; dx=(W-dw)/2; dy=0; } else { dw=W; dh=W/ir; dx=0; dy=(H-dh)/2; }
+      ctx.drawImage(sceneBgImg, dx, dy, dw, dh);
+      ctx.restore();
+      ctx.fillStyle = 'rgba(10,13,20,0.5)';
+      ctx.fillRect(0, 0, W, H);
+    }
 
     // Footpath strips (sides)
-    ctx.fillStyle = '#1a1f2e';
+    ctx.fillStyle = sceneBgImg ? 'rgba(26,31,46,0.6)' : '#1a1f2e';
     ctx.fillRect(0, 0, W, roadTop);
     ctx.fillRect(0, roadTop + roadH, W, H - roadTop - roadH);
 
     // Road surface
-    ctx.fillStyle = '#141820';
+    ctx.fillStyle = sceneBgImg ? 'rgba(20,24,32,0.6)' : '#141820';
     ctx.fillRect(0, roadTop, W, roadH);
 
     // Road lane markings
@@ -1997,6 +2236,13 @@ function updateCrowdCanvas(r, scenario){
       }
     }
 
+    // Existing hurdles — auto-detected from THIS photo, always visible (not clickable)
+    existingHurdles.forEach(h=>{
+      ctx.save(); ctx.globalAlpha=0.85; ctx.font='13px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(h.icon, h._px, h._py);
+      ctx.restore();
+    });
+
     // Rain streaks
     if(scenario.rain){
       ctx.strokeStyle = '#60a5fa22';
@@ -2012,7 +2258,7 @@ function updateCrowdCanvas(r, scenario){
     const speedScale = 60; // pixels per unit speed
     crowdFigures.forEach((f, i) => {
       // Separation force — push apart if too close (jam effect at high density)
-      let sepX = 0;
+      let sepX = 0, sepY = 0;
       crowdFigures.forEach((g, j) => {
         if(i===j) return;
         const dx = f.x - g.x, dy = f.y - g.y;
@@ -2021,13 +2267,22 @@ function updateCrowdCanvas(r, scenario){
           sepX += dx / (d+0.1) * 0.4;
         }
       });
+      // Nudge around real hurdles (existing + user-placed) — light, visual-only avoidance
+      avoidPoints.forEach(hp=>{
+        const dx = f.x - hp.x, dy = f.y - hp.y;
+        const d = Math.sqrt(dx*dx+dy*dy);
+        if(d < hp.r + 12){
+          sepX += dx/(d+0.1) * 0.25;
+          sepY += dy/(d+0.1) * 0.6;
+        }
+      });
 
       // Speed — reduced by local crowding (separation forces indicate congestion)
       const crowdingFactor = Math.max(0, 1 - Math.abs(sepX)*0.8);
       const fSpeed = baseSpeed * crowdingFactor * speedScale;
 
       f.x += (fSpeed + sepX * 0.5) * dt;
-      f.y += (Math.sin(t*0.4 + f.wobble)*0.2) * dt; // gentle vertical drift
+      f.y += (Math.sin(t*0.4 + f.wobble)*0.2 + sepY) * dt; // gentle vertical drift + hurdle avoidance
       f.y = Math.max(roadTop+8, Math.min(roadTop+roadH-8, f.y));
 
       // Wrap around
@@ -2035,6 +2290,19 @@ function updateCrowdCanvas(r, scenario){
       if(f.x < -10) f.x = W + 10;
 
       drawStickFigure(ctx, f.x, f.y, f.size, f.color, fSpeed, f.wobble, t, f.isRain);
+    });
+
+    // User-placed hurdles — drawn on top, tappable to remove
+    manualHurdles.forEach(h=>{
+      const cfg = HURDLE_TYPES.find(x=>x.id===h.type) || {};
+      ctx.save();
+      ctx.beginPath(); ctx.arc(h.px, h.py, 11, 0, Math.PI*2);
+      ctx.fillStyle = (cfg.color||'#f59e0b')+'33'; ctx.fill();
+      ctx.strokeStyle = cfg.color||'#f59e0b'; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.font='13px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillStyle = cfg.color||'#f59e0b';
+      ctx.fillText(cfg.icon||'❓', h.px, h.py);
+      ctx.restore();
     });
 
     // Jam overlay — red pulse when LOS E/F
