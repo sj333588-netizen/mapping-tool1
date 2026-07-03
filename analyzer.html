@@ -1568,7 +1568,7 @@ function showPopup(item){
     } else flowWrap.style.display='none';
 
     // Interactive Scenario Simulator — user-controlled sliders
-    initScenarioSim(q, flow, item.aiData.findings);
+    initScenarioSim(q, flow, item.aiData.findings, item.id);
 
     // Footpath
     const footWrap = document.getElementById('quantFootWrap');
@@ -1821,6 +1821,56 @@ let canvasClickBound = false;
 
 function seededRand(seed){ const x = Math.sin(seed*12.9898)*43758.5453; return x - Math.floor(x); }
 
+// Simple, fast, cross-device shapes for hurdles — no emoji font rendering,
+// so it looks the same (and draws faster) on every browser/laptop.
+function drawHurdleShape(ctx, x, y, kind, color){
+  ctx.save();
+  switch(kind){
+    case 'vehicle':
+      ctx.fillStyle = color||'#ef4444';
+      ctx.beginPath();
+      if(ctx.roundRect) ctx.roundRect(x-9,y-5,18,10,2); else ctx.rect(x-9,y-5,18,10);
+      ctx.fill();
+      ctx.fillStyle='#0a0d14'; ctx.globalAlpha=0.5;
+      ctx.fillRect(x-6,y-5,4,4); ctx.fillRect(x+2,y-5,4,4);
+      break;
+    case 'pothole':
+      ctx.fillStyle='#000'; ctx.globalAlpha=0.65;
+      ctx.beginPath(); ctx.ellipse(x,y,7,4,0,0,Math.PI*2); ctx.fill();
+      ctx.globalAlpha=1; ctx.strokeStyle=color||'#94a3b8'; ctx.lineWidth=1; ctx.stroke();
+      break;
+    case 'tree':
+      ctx.fillStyle='#78350f'; ctx.fillRect(x-1.5,y,3,7);
+      ctx.fillStyle='#22c55e';
+      ctx.beginPath(); ctx.arc(x,y-4,7,0,Math.PI*2); ctx.fill();
+      break;
+    case 'pole':
+      ctx.fillStyle=color||'#38bdf8';
+      ctx.fillRect(x-1.5,y-10,3,18);
+      ctx.beginPath(); ctx.arc(x,y-10,2.5,0,Math.PI*2); ctx.fill();
+      break;
+    case 'stall':
+      ctx.fillStyle=color||'#a855f7';
+      ctx.beginPath();
+      if(ctx.roundRect) ctx.roundRect(x-9,y-7,18,14,3); else ctx.rect(x-9,y-7,18,14);
+      ctx.fill();
+      ctx.fillStyle='#0a0d14'; ctx.globalAlpha=0.3;
+      ctx.fillRect(x-9,y-7,18,4);
+      break;
+    case 'barricade':
+      ctx.fillStyle=color||'#f59e0b';
+      ctx.fillRect(x-11,y-3,22,6);
+      ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.lineWidth=2;
+      for(let i=-9;i<11;i+=6){ ctx.beginPath(); ctx.moveTo(x+i,y-3); ctx.lineTo(x+i+4,y+3); ctx.stroke(); }
+      break;
+    default:
+      ctx.fillStyle=color||'#94a3b8';
+      ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+
 // Map a hazard's quadrant (top-left, middle-center, etc.) — actual AI-observed
 // location in THIS photo — to a position on the diagram, so real hazards land
 // roughly where they really are instead of at a random spot.
@@ -1836,26 +1886,54 @@ function quadrantToPixel(quadrant, W, roadTop, roadH){
   return {px, py};
 }
 
-function buildExistingHurdles(q, findings){
+function mapObstacleKind(type){
+  const t=(type||'').toLowerCase();
+  if(t.includes('tree')) return 'tree';
+  if(t.includes('pole')||t.includes('bollard')||t.includes('pillar')) return 'pole';
+  if(t.includes('kiosk')) return 'stall';
+  return 'obstacle';
+}
+
+function buildExistingHurdles(q, findings, seedBase){
+  seedBase = seedBase || 0;
   const hurdles = [];
   findings = findings || [];
   const findQuad = (id) => { const f = findings.find(x=>x.id===id && x.severity!=='NONE'); return f ? f.quadrant : null; };
+  const trueCounts = {};
+  // Spread N items evenly across the road (0.06–0.94) with a little jitter so
+  // higher counts fan out instead of clustering/overlapping.
+  const spread = (i, total, seed) => 0.06 + ((i+0.5)/Math.max(1,total))*0.88 + (seededRand(seed)-0.5)*0.05;
 
-  const vehCount = Math.min(q.vehicle_count||0, 6);
+  const vehTrue = q.vehicle_count||0;
+  const vehRender = Math.min(vehTrue, 14); // render cap for canvas clarity — chips below still show the true count
+  trueCounts['Parked vehicle'] = vehTrue;
   const vehQuad = findQuad('vehicle_pedestrian_conflict');
-  for(let i=0;i<vehCount;i++) hurdles.push({icon:'🚗', label:'Parked vehicle', side:'edge', seed:i+1, quadrant: i===0?vehQuad:null});
+  for(let i=0;i<vehRender;i++){
+    const seed = seedBase + i*3.71 + 1;
+    hurdles.push({kind:'vehicle', icon:'🚗', label:'Parked vehicle', side:'edge', seed, xFrac: spread(i,vehRender,seed), quadrant: i===0?vehQuad:null});
+  }
 
-  const potholeCount = Math.min(q.pothole_count||0, 5);
+  const potTrue = q.pothole_count||0;
+  const potRender = Math.min(potTrue, 10);
+  trueCounts['Pothole'] = potTrue;
   const potholeQuad = findQuad('pothole');
-  for(let i=0;i<potholeCount;i++) hurdles.push({icon:'🕳️', label:'Pothole', side:'road', seed:i+11, quadrant: i===0?potholeQuad:null});
+  for(let i=0;i<potRender;i++){
+    const seed = seedBase + i*5.29 + 11;
+    hurdles.push({kind:'pothole', icon:'🕳️', label:'Pothole', side:'road', seed, xFrac: spread(i,potRender,seed), quadrant: i===0?potholeQuad:null});
+  }
 
-  const iconMap = {tree:'🌳', pole:'🚦', bollard:'🚧', kiosk:'🏪', statue:'🗿', pillar:'🏛️', bench:'🪑', 'electrical box':'⚡', well:'⛲'};
   const treeQuad = findQuad('tree_canopy');
-  (q.fixed_obstacles||[]).slice(0,6).forEach((o,i)=>{
-    const icon = iconMap[(o.type||'').toLowerCase()] || '📍';
-    const isTree = (o.type||'').toLowerCase()==='tree';
-    hurdles.push({icon, label:o.type||'Fixed obstacle', side:'road', seed:i+21, quadrant: (isTree && i===0) ? treeQuad : null});
+  const fixedObs = q.fixed_obstacles||[];
+  const fixedRender = Math.min(fixedObs.length, 10);
+  fixedObs.slice(0,fixedRender).forEach((o,i)=>{
+    const kind = mapObstacleKind(o.type);
+    const iconMap = {tree:'🌳', pole:'🚦', stall:'🏪', obstacle:'📍'};
+    const label = o.type||'Fixed obstacle';
+    trueCounts[label] = (trueCounts[label]||0)+1;
+    const seed = seedBase + i*4.13 + 21;
+    hurdles.push({kind, icon:iconMap[kind], label, side:'road', seed, xFrac: spread(i,fixedRender,seed), quadrant: (kind==='tree' && i===0) ? treeQuad : null});
   });
+  hurdles._trueCounts = trueCounts;
   return hurdles;
 }
 
@@ -1863,12 +1941,15 @@ function renderExistingHurdlesInfo(){
   const el = document.getElementById('existingHurdlesInfo');
   if(!el) return;
   if(!existingHurdles.length){ el.innerHTML = `<div class="existing-hurdles-lbl">✓ No fixed obstacles/vehicles detected blocking this specific road in the photo</div>`; return; }
-  const counts = {};
-  existingHurdles.forEach(h=>{ counts[h.label] = (counts[h.label]||0)+1; });
+  const shown = {};
+  existingHurdles.forEach(h=>{ shown[h.label] = (shown[h.label]||0)+1; });
+  const trueCounts = existingHurdles._trueCounts || {};
   el.innerHTML = `<div class="existing-hurdles-lbl">📸 Existing hurdles detected on THIS road (already factored into width/area above)</div>
-    <div class="existing-hurdle-chips">${Object.entries(counts).map(([label,n])=>{
+    <div class="existing-hurdle-chips">${Object.entries(shown).map(([label,n])=>{
       const h = existingHurdles.find(x=>x.label===label);
-      return `<span class="eh-chip">${h.icon} <b>${n}×</b> ${label}</span>`;
+      const trueN = trueCounts[label] ?? n;
+      const capped = trueN > n ? ` <span style="opacity:0.65">(${n} shown)</span>` : '';
+      return `<span class="eh-chip">${h.icon} <b>${trueN}×</b> ${label}${capped}</span>`;
     }).join('')}</div>`;
 }
 
@@ -1958,33 +2039,20 @@ function computeScenario(q, flow, scenario){
   return { simPed, simDensity, simWidth, simFlow:simFlowRate, losGrade, warnings, bottleneckRisk, stampede };
 }
 
-function initScenarioSim(q, flow, findings){
+function initScenarioSim(q, flow, findings, photoId){
   simQ = q; simFlow = flow;
-  existingHurdles = buildExistingHurdles(q, findings);
+  existingHurdles = buildExistingHurdles(q, findings, (photoId||0) * 17.3);
   manualHurdles = [];
   activeHurdleTool = null;
   renderExistingHurdlesInfo();
   renderHurdlePalette();
   renderManualHurdleSummary();
   bindCanvasClickOnce();
-  loadSceneBackground();
   const presetsEl = document.getElementById('simPresets');
   if(presetsEl){
     presetsEl.innerHTML = SIM_PRESETS.map(p=>`<button class="sim-preset-btn ${p.id===activePreset?'on':''}" id="preset-${p.id}" onclick="applySimPreset('${p.id}')">${p.label}</button>`).join('');
   }
   applySimPreset(activePreset, true);
-}
-
-// Load the actual field photo as a dimmed backdrop for the scene diagram —
-// makes it visually obvious this is THIS road, not a generic template.
-let sceneBgImg = null, sceneBgLoadedFor = null;
-function loadSceneBackground(){
-  if(!currentPopupItem || !currentPopupItem.imgData){ sceneBgImg = null; sceneBgLoadedFor = null; return; }
-  if(sceneBgLoadedFor === currentPopupItem.id && sceneBgImg) return;
-  sceneBgImg = null;
-  const img = new Image();
-  img.onload = () => { sceneBgImg = img; sceneBgLoadedFor = currentPopupItem.id; };
-  img.src = currentPopupItem.imgData;
 }
 
 function applySimPreset(id, skipButtonSync){
@@ -2172,7 +2240,7 @@ function updateCrowdCanvas(r, scenario){
       const p = quadrantToPixel(h.quadrant, W, roadTop, roadH);
       h._px = p.px; h._py = p.py;
     } else {
-      const fx = 0.08 + seededRand(h.seed*3.1)*0.84;
+      const fx = h.xFrac!=null ? h.xFrac : (0.08 + seededRand(h.seed*3.1)*0.84);
       h._px = fx*W;
       h._py = h.side==='edge' ? ((idx%2===0)?roadTop-9:roadTop+roadH+9) : (roadTop+10+seededRand(h.seed*7.7)*Math.max(1,roadH-20));
     }
@@ -2186,28 +2254,17 @@ function updateCrowdCanvas(r, scenario){
     lastT = ts;
     const t = ts/1000;
 
-    // Background — dimmed actual field photo of THIS road, with the diagram overlaid on top
+    // Background — clean road scene (kept simple: real width/area, real hurdles, no photo clutter)
     ctx.fillStyle = '#0a0d14';
     ctx.fillRect(0, 0, W, H);
-    if(sceneBgImg){
-      ctx.save();
-      ctx.globalAlpha = 0.32;
-      const ir = sceneBgImg.width/sceneBgImg.height, cr = W/H;
-      let dw,dh,dx,dy;
-      if(ir>cr){ dh=H; dw=H*ir; dx=(W-dw)/2; dy=0; } else { dw=W; dh=W/ir; dx=0; dy=(H-dh)/2; }
-      ctx.drawImage(sceneBgImg, dx, dy, dw, dh);
-      ctx.restore();
-      ctx.fillStyle = 'rgba(10,13,20,0.5)';
-      ctx.fillRect(0, 0, W, H);
-    }
 
     // Footpath strips (sides)
-    ctx.fillStyle = sceneBgImg ? 'rgba(26,31,46,0.6)' : '#1a1f2e';
+    ctx.fillStyle = '#1a1f2e';
     ctx.fillRect(0, 0, W, roadTop);
     ctx.fillRect(0, roadTop + roadH, W, H - roadTop - roadH);
 
     // Road surface
-    ctx.fillStyle = sceneBgImg ? 'rgba(20,24,32,0.6)' : '#141820';
+    ctx.fillStyle = '#141820';
     ctx.fillRect(0, roadTop, W, roadH);
 
     // Road lane markings
@@ -2238,9 +2295,7 @@ function updateCrowdCanvas(r, scenario){
 
     // Existing hurdles — auto-detected from THIS photo, always visible (not clickable)
     existingHurdles.forEach(h=>{
-      ctx.save(); ctx.globalAlpha=0.85; ctx.font='13px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText(h.icon, h._px, h._py);
-      ctx.restore();
+      drawHurdleShape(ctx, h._px, h._py, h.kind);
     });
 
     // Rain streaks
@@ -2292,17 +2347,15 @@ function updateCrowdCanvas(r, scenario){
       drawStickFigure(ctx, f.x, f.y, f.size, f.color, fSpeed, f.wobble, t, f.isRain);
     });
 
-    // User-placed hurdles — drawn on top, tappable to remove
+    // User-placed hurdles — drawn on top, ring shows they're tappable to remove
     manualHurdles.forEach(h=>{
       const cfg = HURDLE_TYPES.find(x=>x.id===h.type) || {};
       ctx.save();
-      ctx.beginPath(); ctx.arc(h.px, h.py, 11, 0, Math.PI*2);
-      ctx.fillStyle = (cfg.color||'#f59e0b')+'33'; ctx.fill();
+      ctx.beginPath(); ctx.arc(h.px, h.py, 13, 0, Math.PI*2);
+      ctx.fillStyle = (cfg.color||'#f59e0b')+'22'; ctx.fill();
       ctx.strokeStyle = cfg.color||'#f59e0b'; ctx.lineWidth = 1.5; ctx.stroke();
-      ctx.font='13px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillStyle = cfg.color||'#f59e0b';
-      ctx.fillText(cfg.icon||'❓', h.px, h.py);
       ctx.restore();
+      drawHurdleShape(ctx, h.px, h.py, h.type, cfg.color);
     });
 
     // Jam overlay — red pulse when LOS E/F
