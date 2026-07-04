@@ -740,6 +740,34 @@
         <div id="quantFootWarn" style="display:none;font-size:0.62rem;color:var(--amber);margin-top:4px;">⚠ Unverified — high vehicle count in frame, footpath claim may be inaccurate</div>
       </div>
 
+      <!-- YOLO Verification Card -->
+      <div class="quant-vehicles" id="quantYoloWrap" style="display:none">
+        <div class="qk" style="display:flex;align-items:center;gap:6px;">
+          <span>🤖 YOLO VERIFICATION</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:0.48rem;color:var(--text3);font-weight:400;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.2);padding:1px 5px;border-radius:3px;">YOLOv8n · open-source</span>
+        </div>
+        <div style="font-size:0.6rem;color:var(--text3);margin:2px 0 7px;">Independent cross-check of Groq AI counts using a separate object detection model</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:7px;">
+          <div style="background:var(--bg);border-radius:7px;padding:7px 10px;border:1px solid rgba(255,255,255,0.06);">
+            <div style="font-size:0.52rem;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-bottom:3px;">PEDESTRIANS</div>
+            <div style="display:flex;align-items:flex-end;gap:6px;">
+              <span style="font-size:0.78rem;font-weight:700;color:var(--cyan);" id="yoloPed">—</span>
+              <span style="font-size:0.58rem;color:var(--text3);margin-bottom:1px;">YOLO</span>
+            </div>
+            <div style="font-size:0.55rem;color:var(--text3);margin-top:1px;" id="yoloPedGroq"></div>
+          </div>
+          <div style="background:var(--bg);border-radius:7px;padding:7px 10px;border:1px solid rgba(255,255,255,0.06);">
+            <div style="font-size:0.52rem;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-bottom:3px;">VEHICLES</div>
+            <div style="display:flex;align-items:flex-end;gap:6px;">
+              <span style="font-size:0.78rem;font-weight:700;color:var(--amber);" id="yoloVeh">—</span>
+              <span style="font-size:0.58rem;color:var(--text3);margin-bottom:1px;">YOLO</span>
+            </div>
+            <div style="font-size:0.55rem;color:var(--text3);margin-top:1px;" id="yoloVehGroq"></div>
+          </div>
+        </div>
+        <div id="yoloVerdict" style="font-size:0.65rem;padding:6px 10px;border-radius:6px;font-weight:600;"></div>
+      </div>
+
       <!-- Yes/No Quick Summary -->
       <div class="quant-vehicles" id="quantYNWrap" style="display:none">
         <div class="qk">✅ QUICK CHECKLIST</div>
@@ -1540,11 +1568,32 @@ function showPopup(item){
     }
     document.getElementById('quantPed').textContent = q.pedestrian_count ?? '—';
     const pedVerifyEl = document.getElementById('quantPedVerify');
+    const yoloWrap = document.getElementById('quantYoloWrap');
     if(q.pedestrian_count_yolo !== undefined && q.pedestrian_count_yolo !== null){
-      const verified = q.count_verification === 'verified';
-      pedVerifyEl.innerHTML = `<span style="color:${verified?'var(--green)':'var(--amber)'}">${verified?'✓':'⚠'} YOLO: ${q.pedestrian_count_yolo}${verified?' verified':' — discrepancy'}</span>`;
+      const pedMatch = Math.abs((q.pedestrian_count||0) - q.pedestrian_count_yolo) <= 2;
+      const vehMatch = Math.abs((q.vehicle_count||0) - (q.vehicle_count_yolo||0)) <= 2;
+      const verified = pedMatch && vehMatch;
+      // Badge on pedestrian cell
+      if(pedVerifyEl) pedVerifyEl.innerHTML = `<span style="color:${verified?'var(--green)':'var(--amber)'};">${verified?'✓':'⚠'} YOLO: ${q.pedestrian_count_yolo}</span>`;
+      // Full YOLO card
+      if(yoloWrap){
+        document.getElementById('yoloPed').textContent = q.pedestrian_count_yolo;
+        document.getElementById('yoloPedGroq').textContent = `Groq: ${q.pedestrian_count ?? '—'}`;
+        document.getElementById('yoloVeh').textContent = q.vehicle_count_yolo ?? '—';
+        document.getElementById('yoloVehGroq').textContent = `Groq: ${q.vehicle_count ?? '—'}`;
+        const verdict = document.getElementById('yoloVerdict');
+        if(verified){
+          verdict.innerHTML = `✅ Both models agree — counts are reliable`;
+          verdict.style.cssText='font-size:0.65rem;padding:6px 10px;border-radius:6px;font-weight:600;background:rgba(16,185,129,0.08);color:var(--green);border:1px solid rgba(16,185,129,0.2);';
+        } else {
+          verdict.innerHTML = `⚠ Discrepancy — counts differ between models. Manual count recommended.`;
+          verdict.style.cssText='font-size:0.65rem;padding:6px 10px;border-radius:6px;font-weight:600;background:rgba(245,158,11,0.08);color:var(--amber);border:1px solid rgba(245,158,11,0.25);';
+        }
+        yoloWrap.style.display='';
+      }
     } else {
-      pedVerifyEl.textContent = '';
+      if(pedVerifyEl) pedVerifyEl.innerHTML=`<span style="color:var(--text3);font-size:0.52rem;">YOLO: not available this frame</span>`;
+      if(yoloWrap) yoloWrap.style.display='none';
     }
     document.getElementById('quantVeh').textContent = q.vehicle_count ?? '0';
     document.getElementById('quantPot').textContent = q.pothole_count ?? '0';

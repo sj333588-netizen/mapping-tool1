@@ -385,6 +385,12 @@ Respond ONLY with this JSON (no markdown, no extra text):
       let yoloPromise = Promise.resolve(null);
       if (yoloServiceUrl && parsed.quantification) {
         try {
+          // Railway free tier sleeps after 15 min inactivity — first request can
+          // take 30-50s to wake up. We send a lightweight GET ping first (fast,
+          // fails gracefully), then send the actual detect POST.
+          // We don't await the ping — it just primes the connection.
+          fetch(`${yoloServiceUrl}/`, { method:'GET' }).catch(()=>{});
+
           const imgBuffer = Buffer.from(image, 'base64');
           const boundary = '----YOLOBoundary' + Date.now();
           const CRLF = '\r\n';
@@ -397,7 +403,9 @@ Respond ONLY with this JSON (no markdown, no extra text):
           const multipartBody = Buffer.concat([header, imgBuffer, footer]);
 
           const yoloController = new AbortController();
-          const yoloTimeout = setTimeout(() => yoloController.abort(), 4000);
+          // 7 second timeout — enough for a warm Railway service, still within
+          // Netlify's 10s function limit when Groq call takes ~3-4s
+          const yoloTimeout = setTimeout(() => yoloController.abort(), 7000);
 
           yoloPromise = fetch(`${yoloServiceUrl}/detect`, {
             method: 'POST',
