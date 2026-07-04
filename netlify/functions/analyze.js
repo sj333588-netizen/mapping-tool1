@@ -69,10 +69,15 @@ public_summary: ONE short plain-language sentence a common pilgrim/citizen (not 
 CONFIDENCE → SEVERITY: 0-50%=NONE | 51-65%=LOW | 66-80%=MEDIUM | 81-92%=HIGH | 93-100%=CRITICAL
 QUADRANT: Where in the photo is this hazard? Choose: top-left | top-center | top-right | middle-left | middle-center | middle-right | bottom-left | bottom-center | bottom-right. Use 'not-visible' ONLY if severity is NONE.
 
-BBOX (separate section at end of JSON): For each hazard with severity != NONE, provide precise center coordinates as percentage of photo. Only include hazards that are actually detected.
+BBOX (separate section at end of JSON) — MANDATORY, not optional: For EVERY hazard with severity != NONE, you MUST include its own entry in "bboxes". Do not skip any detected hazard.
 Format: "bboxes": { "hazard_id": [x_pct, y_pct, w_pct, h_pct], ... }
 Example: pothole at bottom-center, vehicles at middle-right → "bboxes": {"pothole":[50,80,20,15],"vehicle_pedestrian_conflict":[70,45,35,25]}
 x=0 left, x=100 right | y=0 top, y=100 bottom | w/h = size of object in % of photo
+
+CRITICAL — each hazard gets ITS OWN distinct box, pointing at that specific hazard's actual visual location/extent:
+- Never copy the same [x,y,w,h] for two different hazards, even if they're conceptually related or in the same general area (e.g. "bottleneck", "road_vehicle_zone" and "vehicle_pedestrian_conflict" can all be near the same spot in reality, but each must still be centered/sized on ITS OWN specific object or extent — the road's narrow section, the vehicles themselves, the point where a person and vehicle are closest — so their boxes end up at slightly different coordinates, not identical ones stacked on each other.
+- If a hazard covers a broad area (e.g. "narrow_path" spanning the whole visible road), give it a correspondingly wide/tall box — don't just reuse a small object's box for it.
+- A reviewer must be able to look at the photo and tell WHICH box belongs to WHICH hazard without them all sitting in one identical stack.
 
 MEASUREMENTS: Adult shoulder ~45cm, height ~165cm | Car ~1.8m wide 4m long | Motorcycle ~2m long | Bus ~12m long
 
