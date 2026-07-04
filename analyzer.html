@@ -826,6 +826,14 @@
               </div>
               <input type="range" id="simWidthSlider" min="0" max="60" step="5" value="0" oninput="onSimSliderChange()"/>
             </div>
+            <div class="sim-ctrl-row">
+              <div class="sim-ctrl-head">
+                <span class="sim-ctrl-lbl">👴 Elderly / Vulnerable Pilgrims</span>
+                <span class="sim-ctrl-val" id="simVulnVal">15%</span>
+              </div>
+              <input type="range" id="simVulnSlider" min="0" max="50" step="5" value="15" oninput="onSimSliderChange()"/>
+              <div style="font-size:0.56rem;color:var(--text3);margin-top:4px;">Not everyone walks at the same speed — bujurg/divyang pilgrims move slower, which affects flow behind them too</div>
+            </div>
             <div class="sim-ctrl-row" style="margin-bottom:0;">
               <div class="sim-rain-row">
                 <span class="sim-ctrl-lbl">🌧 Rain / Wet Conditions</span>
@@ -845,16 +853,16 @@
           <div style="margin-top:12px;">
             <div style="font-family:'JetBrains Mono',monospace;font-size:0.55rem;color:var(--text3);letter-spacing:0.1em;margin-bottom:6px;">🎬 LIVE CROWD VISUALIZATION — this road, not a generic one</div>
             <div style="position:relative;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);">
-              <canvas id="crowdCanvas" width="520" height="140" style="width:100%;height:auto;display:block;background:#0a0d14;"></canvas>
+              <canvas id="crowdCanvas" width="640" height="300" style="width:100%;height:auto;display:block;background:#0a0d14;"></canvas></canvas>
               <div id="crowdLosLabel" style="position:absolute;top:6px;right:8px;font-family:'JetBrains Mono',monospace;font-size:0.6rem;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(0,0,0,0.7);"></div>
               <!-- Dedicated hit-testing layer, separate from the <canvas> — some
                    mobile browsers are unreliable delivering pointer/click events
                    directly on a CSS-scaled <canvas>. A plain div on top always
                    receives taps correctly. -->
-              <div id="crowdCanvasOverlay" style="position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;cursor:crosshair;z-index:5;"></div>
-              <div id="hurdleToast" style="display:none;position:absolute;left:50%;top:8px;transform:translateX(-50%);background:rgba(15,20,30,0.92);color:#fff;font-size:0.65rem;font-weight:600;padding:4px 10px;border-radius:999px;pointer-events:none;white-space:nowrap;z-index:6;"></div>
+              <div id="crowdCanvasOverlay" style="position:absolute;inset:0;cursor:crosshair;"></div>
+              <div id="hurdleToast" style="display:none;position:absolute;left:50%;top:8px;transform:translateX(-50%);background:rgba(15,20,30,0.92);color:#fff;font-size:0.65rem;font-weight:600;padding:4px 10px;border-radius:999px;pointer-events:none;white-space:nowrap;"></div>
             </div>
-            <div style="font-size:0.55rem;color:var(--text3);margin-top:4px;text-align:center;">Each figure = 1 pilgrim · Speed reflects actual LOS crowd flow rate</div>
+            <div style="font-size:0.55rem;color:var(--text3);margin-top:4px;text-align:center;">Each figure = 1 pilgrim · Speed reflects LOS flow rate · 🦯 cane = elderly/vulnerable pilgrim (slower pace)</div>
 
             <!-- Existing hurdles auto-detected from THIS photo -->
             <div class="hurdle-section" id="existingHurdlesInfo"></div>
@@ -1834,6 +1842,9 @@ function seededRand(seed){ const x = Math.sin(seed*12.9898)*43758.5453; return x
 // so it looks the same (and draws faster) on every browser/laptop.
 function drawHurdleShape(ctx, x, y, kind, color){
   ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(1.4, 1.4); // scaled up for the larger simulation view
+  x = 0; y = 0;
   switch(kind){
     case 'vehicle':
       ctx.fillStyle = color || '#64748b';
@@ -1910,7 +1921,7 @@ function mapObstacleKind(type){
   return 'obstacle';
 }
 
-function buildExistingHurdles(q, findings, seedBase){
+function buildExistingHurdles(q, findings, seedBase, hasFootpath){
   seedBase = seedBase || 0;
   const hurdles = [];
   findings = findings || [];
@@ -1921,13 +1932,21 @@ function buildExistingHurdles(q, findings, seedBase){
   const spread = (i, total, seed) => 0.06 + ((i+0.5)/Math.max(1,total))*0.88 + (seededRand(seed)-0.5)*0.05;
 
   const vehTrue = q.vehicle_count||0;
-  const vehRender = Math.min(vehTrue, 14); // render cap for canvas clarity — chips below still show the true count
   trueCounts['Parked vehicle'] = vehTrue;
   const vehQuad = findQuad('vehicle_pedestrian_conflict');
-  for(let i=0;i<vehRender;i++){
+  // On a road WITH a dedicated footpath, parked vehicles sit at the road's edge
+  // (footpath side), out of the pedestrian path — draw them there.
+  // On a road with NO footpath (pedestrians & vehicles share the same surface),
+  // vehicles are physically ON that shared surface, not floating in a footpath
+  // strip that doesn't exist here — AND a few of them are treated as moving
+  // through-traffic instead of static, since this is genuinely a shared road.
+  const movingVehicleCount = hasFootpath ? 0 : Math.min(3, vehTrue);
+  const staticVehCount = Math.max(0, Math.min(vehTrue, 14) - movingVehicleCount);
+  for(let i=0;i<staticVehCount;i++){
     const seed = seedBase + i*3.71 + 1;
-    hurdles.push({kind:'vehicle', icon:'🚗', label:'Parked vehicle', side:'edge', seed, xFrac: spread(i,vehRender,seed), quadrant: i===0?vehQuad:null});
+    hurdles.push({kind:'vehicle', icon:'🚗', label:'Parked vehicle', side: hasFootpath ? 'edge' : 'road', seed, xFrac: spread(i,staticVehCount,seed), quadrant: i===0?vehQuad:null});
   }
+  hurdles._movingVehicleCount = movingVehicleCount;
 
   const potTrue = q.pothole_count||0;
   const potRender = Math.min(potTrue, 10);
@@ -1956,17 +1975,22 @@ function buildExistingHurdles(q, findings, seedBase){
 function renderExistingHurdlesInfo(){
   const el = document.getElementById('existingHurdlesInfo');
   if(!el) return;
-  if(!existingHurdles.length){ el.innerHTML = `<div class="hurdle-section-title">✓ No fixed obstacles or vehicles detected blocking this road</div>`; return; }
+  const movingCount = existingHurdles._movingVehicleCount || 0;
+  if(!existingHurdles.length && !movingCount){ el.innerHTML = `<div class="hurdle-section-title">✓ No fixed obstacles or vehicles detected blocking this road</div>`; return; }
   const shown = {};
   existingHurdles.forEach(h=>{ shown[h.label] = (shown[h.label]||0)+1; });
   const trueCounts = existingHurdles._trueCounts || {};
+  let chips = Object.entries(shown).map(([label,n])=>{
+    const h = existingHurdles.find(x=>x.label===label);
+    const trueN = trueCounts[label] ?? n;
+    const staticN = trueN - (label==='Parked vehicle' ? movingCount : 0);
+    const capped = staticN > n ? ` <span style="opacity:0.6">(${n} shown)</span>` : '';
+    return `<span class="eh-chip">${h.icon} ${label} <span class="eh-count">×${staticN}</span>${capped}</span>`;
+  });
+  if(movingCount>0) chips.push(`<span class="eh-chip">🚙 Passing vehicle (moving) <span class="eh-count">×${movingCount}</span></span>`);
+  const sharedNote = movingCount>0 ? `<div style="font-size:0.58rem;color:var(--amber);margin-top:4px;">⚠️ No dedicated footpath here — vehicles &amp; pedestrians share this same surface</div>` : '';
   el.innerHTML = `<div class="hurdle-section-title">Already on this road <span style="color:var(--text3);font-weight:400;">— factored into the width/area above</span></div>
-    <div class="existing-hurdle-chips">${Object.entries(shown).map(([label,n])=>{
-      const h = existingHurdles.find(x=>x.label===label);
-      const trueN = trueCounts[label] ?? n;
-      const capped = trueN > n ? ` <span style="opacity:0.6">(${n} shown)</span>` : '';
-      return `<span class="eh-chip">${h.icon} ${label} <span class="eh-count">×${trueN}</span>${capped}</span>`;
-    }).join('')}</div>`;
+    <div class="existing-hurdle-chips">${chips.join('')}</div>${sharedNote}`;
 }
 
 function renderHurdlePalette(){
@@ -2006,24 +2030,17 @@ function removeManualHurdleAt(i){
 let lastHurdleTapAt = 0;
 function bindCanvasClickOnce(){
   const overlay = document.getElementById('crowdCanvasOverlay');
-  const canvas = document.getElementById('crowdCanvas');
-  if(!overlay || !canvas || canvasClickBound) return;
+  if(!overlay || canvasClickBound) return;
   overlay.style.touchAction = 'none';
-  canvas.style.touchAction = 'none';
-  // Primary: transparent overlay div (most reliable across mobile browsers).
-  // Backup: bind the same handler directly on the canvas too, in case the
-  // overlay ever ends up mis-sized or unsupported — belt and suspenders.
+  // Bound on the transparent overlay div (not the <canvas> itself) — canvas
+  // elements are unreliable for receiving touch/pointer events on some mobile
+  // browsers once CSS-scaled. pointerup is primary (fires on tap-release,
+  // cancels itself automatically if the browser decided it was a scroll);
+  // click stays as a fallback for older webviews. Debounced so one tap never
+  // double-counts.
   overlay.addEventListener('pointerup', onCrowdCanvasClick);
   overlay.addEventListener('click', onCrowdCanvasClick);
-  canvas.addEventListener('pointerup', onCrowdCanvasClick);
-  canvas.addEventListener('click', onCrowdCanvasClick);
   canvasClickBound = true;
-  // Sanity check for debugging — if this ever logs, the overlay isn't covering
-  // the canvas and taps will silently miss.
-  requestAnimationFrame(()=>{
-    const r = overlay.getBoundingClientRect();
-    if(r.width < 10 || r.height < 10) console.warn('[hurdle] overlay has near-zero size — tap detection may fail', r);
-  });
 }
 function showHurdleToast(msg, isError){
   const t = document.getElementById('hurdleToast');
@@ -2103,6 +2120,7 @@ function computeScenario(q, flow, scenario){
   if(scenario.rain && (q.zone_type==='ghat'||q.zone_type==='transport'||q.puddle_count>0)) warnings.push('🌧 Rain increases slip/waterlogging risk at this location');
   if(scenario.widthFactor < 1) warnings.push(`🚧 Barricades reduce effective width to ${simWidth}m`);
   if(scenario.manualPct>0) warnings.push(`🧩 Hurdles you added further reduce width by ${scenario.manualPct}%`);
+  if((scenario.vulnPct ?? 15) >= 20 && simDensity >= 0.27) warnings.push(`👴 ${scenario.vulnPct}% elderly/vulnerable pilgrims move slower — expect bunching behind them even before this density becomes critical`);
   if(simFlowRate < 50) warnings.push('🔻 Location becomes a severe bottleneck under these conditions');
   const bottleneckRisk = simDensity >= 0.43 ? 'HIGH' : simDensity >= 0.27 ? 'MEDIUM' : 'LOW';
   const stampede = simDensity >= 2.2 ? 'CRITICAL' : simDensity >= 0.72 ? 'HIGH' : simDensity >= 0.43 ? 'MEDIUM' : 'LOW';
@@ -2112,7 +2130,8 @@ function computeScenario(q, flow, scenario){
 
 function initScenarioSim(q, flow, findings, photoId){
   simQ = q; simFlow = flow;
-  existingHurdles = buildExistingHurdles(q, findings, (photoId||0) * 17.3);
+  existingHurdles = buildExistingHurdles(q, findings, (photoId||0) * 17.3, flow ? flow.hasFootpath : true);
+  crowdVehicles = [];
   manualHurdles = [];
   activeHurdleTool = null;
   renderExistingHurdlesInfo();
@@ -2143,9 +2162,11 @@ function onSimSliderChange(fromPreset){
   const crowdMult = parseInt(document.getElementById('simCrowdSlider').value);
   const widthPct  = parseInt(document.getElementById('simWidthSlider').value);
   const rain      = document.getElementById('simRainToggle').checked;
+  const vulnPct   = parseInt(document.getElementById('simVulnSlider').value);
   const manualPct = getManualHurdlePct();
   document.getElementById('simCrowdVal').textContent = crowdMult + '×';
   document.getElementById('simWidthVal').textContent = manualPct>0 ? `${widthPct}% + ${manualPct}% added` : widthPct + '%';
+  document.getElementById('simVulnVal').textContent = vulnPct + '%';
 
   // If user manually drags away from the preset's exact values, deselect preset highlight
   if(!fromPreset){
@@ -2157,7 +2178,7 @@ function onSimSliderChange(fromPreset){
   const content = document.getElementById('simLiveContent');
   if(!simQ || !simFlow){ if(content) content.innerHTML = `<div style="font-size:0.65rem;color:var(--text3);text-align:center;padding:8px;">Not enough scene data at this location to simulate crowd flow.</div>`; return; }
   const totalWidthPct = Math.min(90, widthPct + manualPct);
-  const scenario = { crowdMult, widthFactor: 1 - (totalWidthPct/100), rain, manualPct, sliderPct:widthPct };
+  const scenario = { crowdMult, widthFactor: 1 - (totalWidthPct/100), rain, manualPct, sliderPct:widthPct, vulnPct };
   const r = computeScenario(simQ, simFlow, scenario);
   renderSimLive(r, scenario);
 }
@@ -2199,12 +2220,13 @@ function renderSimLive(r, scenario){
 // so the animation is grounded in the same numbers shown in the data cards.
 let crowdAnimFrame = null;
 let crowdFigures = [];
+let crowdVehicles = []; // moving through-traffic — only exists when road has no dedicated footpath
 
 const LOS_SPEED = { // pixels per second at canvas scale
   'A': 2.2, 'B': 1.7, 'C': 1.1, 'D': 0.6, 'E': 0.25, 'F': 0
 };
 
-function makeFigure(canvasW, canvasH, roadTop, roadH, color, isRain){
+function makeFigure(canvasW, canvasH, roadTop, roadH, color, isRain, vulnerable){
   return {
     x: Math.random() * canvasW,
     y: roadTop + 8 + Math.random() * (roadH - 16),
@@ -2214,12 +2236,18 @@ function makeFigure(canvasW, canvasH, roadTop, roadH, color, isRain){
     isRain,
     stuck: false,
     stuckTimer: 0,
-    size: 6 + Math.random() * 2
+    size: 8 + Math.random() * 3,
+    vulnerable,
+    // Individual walking pace — not everyone moves at the same speed.
+    // Elderly/divyang pilgrims: ~40-55% of average pace (per HCM-style
+    // adjustment factors for special populations). Everyone else still
+    // gets natural person-to-person variation (±20%).
+    pace: vulnerable ? (0.45 + Math.random()*0.15) : (0.85 + Math.random()*0.4)
   };
 }
 
-function drawStickFigure(ctx, x, y, size, color, speed, wobble, t, isRain){
-  const walk = speed > 0.3 ? Math.sin(t * 6 + wobble) * 3 : 0;
+function drawStickFigure(ctx, x, y, size, color, speed, wobble, t, isRain, vulnerable){
+  const walk = speed > 0.3 ? Math.sin(t * 6 + wobble) * (vulnerable ? 1.5 : 3) : 0;
   ctx.save();
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
@@ -2252,6 +2280,14 @@ function drawStickFigure(ctx, x, y, size, color, speed, wobble, t, isRain){
   ctx.moveTo(x, y + size*0.3);
   ctx.lineTo(x + size*0.5, y + size - walk);
   ctx.stroke();
+
+  // Cane — small visual cue for elderly/vulnerable pilgrims (slower pace)
+  if(vulnerable){
+    ctx.beginPath();
+    ctx.moveTo(x + size*0.7, y - size*0.2);
+    ctx.lineTo(x + size*0.85, y + size*1.1);
+    ctx.stroke();
+  }
 
   // Rain drop on head
   if(isRain && Math.random() < 0.008){
@@ -2286,13 +2322,29 @@ function updateCrowdCanvas(r, scenario){
   // Number of figures — capped at 60 for perf; scaled to density
   const figCount = Math.min(60, Math.max(3, Math.round(r.simPed * 0.4)));
 
-  // Re-init figures when count changes meaningfully
-  if(Math.abs(crowdFigures.length - figCount) > 2){
+  // Re-init figures when count changes meaningfully, OR when the elderly/vulnerable
+  // mix changes (since that changes each figure's pace, not just how many there are)
+  const vulnFraction = (scenario.vulnPct ?? 15) / 100;
+  const vulnChanged = Math.abs((window._lastVulnFraction ?? -1) - vulnFraction) > 0.001;
+  window._lastVulnFraction = vulnFraction;
+  if(Math.abs(crowdFigures.length - figCount) > 2 || vulnChanged){
     crowdFigures = Array.from({length: figCount}, () =>
-      makeFigure(W, H, roadTop, roadH, figColor, scenario.rain));
+      makeFigure(W, H, roadTop, roadH, figColor, scenario.rain, Math.random() < vulnFraction));
   } else {
     // update colour/rain without resetting positions
     crowdFigures.forEach(f=>{ f.color = figColor; f.isRain = scenario.rain; });
+  }
+
+  // Moving through-traffic — only on roads with NO dedicated footpath, where
+  // vehicles genuinely share the walking surface with pedestrians
+  const movingVehCount = existingHurdles._movingVehicleCount || 0;
+  if(crowdVehicles.length !== movingVehCount){
+    crowdVehicles = Array.from({length: movingVehCount}, (_, i) => ({
+      x: seededRand(i*9.1+1) * W,
+      y: roadTop + roadH*0.25 + seededRand(i*6.3+2) * (roadH*0.5),
+      dir: seededRand(i*4.7+3) > 0.5 ? 1 : -1,
+      speedJitter: 0.8 + seededRand(i*2.9+4)*0.5
+    }));
   }
 
   // Update LOS label
@@ -2316,7 +2368,7 @@ function updateCrowdCanvas(r, scenario){
       h._py = h.side==='edge' ? ((idx%2===0)?roadTop-9:roadTop+roadH+9) : (roadTop+10+seededRand(h.seed*7.7)*Math.max(1,roadH-20));
     }
   });
-  const avoidPoints = [...existingHurdles.map(h=>({x:h._px,y:h._py,r:15})), ...manualHurdles.map(h=>({x:h.px,y:h.py,r:16}))];
+  const avoidPoints = [...existingHurdles.map(h=>({x:h._px,y:h._py,r:20})), ...manualHurdles.map(h=>({x:h.px,y:h.py,r:22}))];
 
   let lastT = null;
   function frame(ts){
@@ -2369,6 +2421,27 @@ function updateCrowdCanvas(r, scenario){
       drawHurdleShape(ctx, h._px, h._py, h.kind);
     });
 
+    // Moving through-traffic — real vehicles sharing this road with pedestrians
+    // (only exists when the AI found no dedicated footpath here)
+    const vehicleSpeed = 115; // px/s — noticeably faster than walking pace
+    crowdVehicles.forEach(v=>{
+      v.x += v.dir * vehicleSpeed * v.speedJitter * dt;
+      if(v.x > W + 20) v.x = -20;
+      if(v.x < -20) v.x = W + 20;
+      drawHurdleShape(ctx, v.x, v.y, 'vehicle', '#f87171');
+      // small direction arrow so it reads as moving traffic, not a parked car
+      ctx.save();
+      ctx.fillStyle = '#f87171';
+      ctx.beginPath();
+      const ax = v.x + v.dir*13;
+      ctx.moveTo(ax, v.y-3); ctx.lineTo(ax + v.dir*5, v.y); ctx.lineTo(ax, v.y+3);
+      ctx.fill();
+      ctx.restore();
+    });
+    const dynamicAvoidPoints = crowdVehicles.length
+      ? avoidPoints.concat(crowdVehicles.map(v=>({x:v.x, y:v.y, r:19})))
+      : avoidPoints;
+
     // Rain streaks
     if(scenario.rain){
       ctx.strokeStyle = '#60a5fa22';
@@ -2381,7 +2454,7 @@ function updateCrowdCanvas(r, scenario){
     }
 
     // Move & draw figures
-    const speedScale = 60; // pixels per unit speed
+    const speedScale = 78; // pixels per unit speed
     crowdFigures.forEach((f, i) => {
       // Separation force — push apart if too close (jam effect at high density)
       let sepX = 0, sepY = 0;
@@ -2396,7 +2469,7 @@ function updateCrowdCanvas(r, scenario){
       // Nudge around real hurdles (existing + user-placed) — strength ramps up to
       // 100% right at the obstacle's edge and fades out over the influence radius,
       // and is scaled by speedScale so the detour is actually visible (not sub-pixel).
-      avoidPoints.forEach(hp=>{
+      dynamicAvoidPoints.forEach(hp=>{
         const dx = f.x - hp.x, dy = f.y - hp.y;
         const d = Math.sqrt(dx*dx+dy*dy);
         const influenceR = hp.r + 20;
@@ -2407,9 +2480,12 @@ function updateCrowdCanvas(r, scenario){
         }
       });
 
-      // Speed — reduced by local crowding (separation forces indicate congestion)
+      // Speed — reduced by local crowding, AND by this person's own walking pace
+      // (elderly/vulnerable pilgrims walk slower — and because faster people behind
+      // them get pulled into the same separation-force crowding, this alone creates
+      // realistic bunching behind slow-moving pilgrims, not just at high density)
       const crowdingFactor = Math.max(0.15, 1 - Math.min(1, Math.abs(sepX))*0.6);
-      const fSpeed = baseSpeed * crowdingFactor * speedScale;
+      const fSpeed = baseSpeed * crowdingFactor * speedScale * f.pace;
 
       f.x += (fSpeed + sepX * speedScale * 0.4) * dt;
       f.y += (Math.sin(t*0.4 + f.wobble)*3 + sepY * speedScale * 0.55) * dt; // gentle drift + real hurdle avoidance
@@ -2419,7 +2495,7 @@ function updateCrowdCanvas(r, scenario){
       if(f.x > W + 10) f.x = -10;
       if(f.x < -10) f.x = W + 10;
 
-      drawStickFigure(ctx, f.x, f.y, f.size, f.color, fSpeed, f.wobble, t, f.isRain);
+      drawStickFigure(ctx, f.x, f.y, f.size, f.color, fSpeed, f.wobble, t, f.isRain, f.vulnerable);
     });
 
     // User-placed hurdles — drawn on top, ring shows they're tappable to remove
