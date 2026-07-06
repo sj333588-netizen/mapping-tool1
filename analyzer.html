@@ -624,7 +624,10 @@
 
   <!-- MAP AREA with playback overlay inside -->
   <div id="map" class="active-view">
-    <div id="mapPickHint" style="display:none;position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:1000;background:#111827ee;color:#fff;padding:8px 16px;border-radius:999px;font-size:0.72rem;font-weight:600;box-shadow:0 4px 14px rgba(0,0,0,0.35);">📍 Click anywhere on the map to set this photo's location</div>
+    <div id="mapPickHint" style="display:none;position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:1000;background:#111827ee;color:#fff;padding:8px 10px 8px 16px;border-radius:999px;font-size:0.72rem;font-weight:600;box-shadow:0 4px 14px rgba(0,0,0,0.35);display:flex;align-items:center;gap:10px;">
+      <span>📍 Click anywhere on the map to set this photo's location</span>
+      <button onclick="cancelPickLocation()" style="background:rgba(255,255,255,0.15);border:none;color:#fff;border-radius:999px;width:20px;height:20px;font-size:0.7rem;cursor:pointer;line-height:1;">✕</button>
+    </div>
     <!-- TIMELINE PLAYBACK OVERLAY — lives inside map div -->
     <div class="pb-ovl" id="pbOvl">
       <div class="pb-card">
@@ -1309,7 +1312,7 @@ function saveGpsEdit(){
 function pickLocationOnMap(){
   pickingLocationMode = true;
   document.getElementById('gpsEditModal').classList.remove('show');
-  document.getElementById('mapPickHint').style.display = '';
+  document.getElementById('mapPickHint').style.display = 'flex';
   // Make sure the map view is actually visible while picking
   switchView('map');
 }
@@ -1328,6 +1331,11 @@ function gpsSourceLabel(item){
     case 'default': return '⚠ Not detected (approximate)';
     default: return item.gpsFromExif ? 'EXIF (from photo)' : 'Live GPS';
   }
+}
+function cancelPickLocation(){
+  pickingLocationMode = false;
+  gpsEditingId = null;
+  document.getElementById('mapPickHint').style.display = 'none';
 }
 map.on('click', function(e){
   if(!pickingLocationMode) return;
