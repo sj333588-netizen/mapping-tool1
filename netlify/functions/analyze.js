@@ -88,6 +88,12 @@ IMPORTANT FOR QUANTIFICATION:
 - footpath_width_meters: number only (e.g. 1.5)
 - All example values in JSON below are placeholders — replace with actual observed values
 
+OVERLAY GPS TEXT (many field-survey camera apps like "GPS Map Camera" burn a text/map overlay directly onto the photo, showing printed decimal latitude/longitude numbers, e.g. "Latitude 20.003442, Longitude 73.793695"):
+- Look for such a printed overlay panel, usually along the bottom or a corner of the image.
+- If exact printed decimal coordinates are clearly legible, extract them precisely as printed.
+- Do NOT guess, estimate, or infer coordinates from place names, landmarks, or the map thumbnail if the actual decimal numbers aren't clearly legible — only report what is literally printed as digits.
+- overlay_gps: {"visible": true|false, "lat": number|null, "lng": number|null} — visible=false and lat/lng=null if no legible printed coordinate numbers are found.
+
 FIXED OBSTACLES (permanent structures that reduce usable walking area):
 - Identify any PERMANENT fixed structures standing on the walkable surface itself: statue, pillar, pole, tree trunk, bollard, kiosk, permanent bench, electrical box, well/structure base, monument.
 - Do NOT count: parked vehicles (temporary), people, movable carts — only permanent fixed structures.
@@ -130,6 +136,7 @@ Respond ONLY with this JSON (no markdown, no extra text):
     "vehicle_count": 0,
     "environment_type": "road"
   },
+  "overlay_gps": {"visible": false, "lat": null, "lng": null},
   "quantification": {
     "road_width_meters": 8,
     "area_estimate_sqm": 200,

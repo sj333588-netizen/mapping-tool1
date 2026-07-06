@@ -213,6 +213,19 @@
     /* POPUP */
     .pop-ovl{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:16px;}
     .pop-ovl.show{display:flex;}
+    .gps-edit-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10000;align-items:center;justify-content:center;padding:16px;}
+    .gps-edit-modal.show{display:flex;}
+    .gps-edit-box{background:var(--panel2,#151b26);border:1px solid var(--border2,#2a3441);border-radius:14px;padding:18px;width:100%;max-width:340px;}
+    .gps-edit-title{font-size:0.85rem;font-weight:700;color:var(--text,#fff);margin-bottom:12px;}
+    .gps-edit-row{margin-bottom:10px;}
+    .gps-edit-row label{display:block;font-size:0.62rem;color:var(--text3,#8b96a5);margin-bottom:4px;}
+    .gps-edit-row input{width:100%;box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid var(--border2,#2a3441);background:var(--panel,#0f141c);color:var(--text,#fff);font-size:0.8rem;}
+    .gps-edit-hint{font-size:0.6rem;color:var(--text3,#8b96a5);line-height:1.4;margin:6px 0 14px;}
+    .gps-edit-actions{display:flex;gap:6px;flex-wrap:wrap;}
+    .gps-edit-actions button{flex:1;padding:8px 6px;border-radius:8px;border:1px solid var(--border2,#2a3441);background:var(--panel,#0f141c);color:var(--text2,#c8d0da);font-size:0.65rem;font-weight:600;cursor:pointer;white-space:nowrap;}
+    .gps-edit-actions button.primary{background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;border-color:transparent;}
+    .fi-fix-btn{margin-top:4px;font-size:0.58rem;padding:2px 7px;border-radius:6px;border:1px solid var(--border2,#2a3441);background:var(--panel,#0f141c);color:var(--amber,#f59e0b);cursor:pointer;}
+    .fi-approx-badge{font-size:0.55rem;color:var(--amber,#f59e0b);}
     .pop-box{background:var(--panel);border:1px solid var(--border2);border-radius:12px;width:100%;max-width:760px;max-height:94vh;overflow-y:auto;overflow-x:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.7);flex-shrink:0;}
     .pop-box::-webkit-scrollbar{width:3px;}
     .pop-box::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
@@ -541,7 +554,7 @@
       <div class="dz" id="photoDZ">
         <input type="file" accept="image/*" id="photoInput" multiple/>
         <div class="dz-icon">📷</div>
-        <div class="dz-text"><strong>Drop photos here</strong>GPS auto-read from EXIF</div>
+        <div class="dz-text"><strong>Drop photos here</strong>GPS auto-read from EXIF (fix manually if missing)</div>
       </div>
     </div>
     <div class="block">
@@ -611,6 +624,7 @@
 
   <!-- MAP AREA with playback overlay inside -->
   <div id="map" class="active-view">
+    <div id="mapPickHint" style="display:none;position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:1000;background:#111827ee;color:#fff;padding:8px 16px;border-radius:999px;font-size:0.72rem;font-weight:600;box-shadow:0 4px 14px rgba(0,0,0,0.35);">📍 Click anywhere on the map to set this photo's location</div>
     <!-- TIMELINE PLAYBACK OVERLAY — lives inside map div -->
     <div class="pb-ovl" id="pbOvl">
       <div class="pb-card">
@@ -662,6 +676,21 @@
 </div>
 
 <!-- POPUP -->
+<!-- MANUAL GPS FIX MODAL — for photos with missing/wrong location (e.g. WhatsApp-compressed images strip EXIF GPS) -->
+<div class="gps-edit-modal" id="gpsEditModal">
+  <div class="gps-edit-box">
+    <div class="gps-edit-title">📍 Fix location — Photo #<span id="gpsEditId"></span></div>
+    <div class="gps-edit-row"><label>Latitude</label><input type="number" step="0.000001" id="gpsEditLat" placeholder="e.g. 20.003442"></div>
+    <div class="gps-edit-row"><label>Longitude</label><input type="number" step="0.000001" id="gpsEditLng" placeholder="e.g. 73.793695"></div>
+    <div class="gps-edit-hint">Type the exact decimal coordinates shown on your photo's overlay (e.g. from GPS Map Camera), or click "Pick on map" and tap the correct spot.</div>
+    <div class="gps-edit-actions">
+      <button onclick="pickLocationOnMap()">🗺 Pick on map</button>
+      <button onclick="closeGpsEdit()">Cancel</button>
+      <button class="primary" onclick="saveGpsEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
 <div class="pop-ovl" id="popOvl">
   <div class="pop-box">
     <div class="pop-photo" id="popPhotoWrap">
@@ -1231,7 +1260,7 @@ async function loadPhotos(files){const arr=Array.from(files).filter(f=>f.type.st
 
 function addToQueue({imgData,lat,lng,accuracy,filename,timestamp,gpsFromExif}){
   const id=queue.length+1;
-  const item={id,imgData,lat,lng,accuracy:accuracy||0,filename:filename||`Photo ${id}`,timestamp:timestamp||new Date().toISOString(),status:'pending',aiData:null,gpsFromExif};
+  const item={id,imgData,lat,lng,accuracy:accuracy||0,filename:filename||`Photo ${id}`,timestamp:timestamp||new Date().toISOString(),status:'pending',aiData:null,gpsFromExif,gpsSource:gpsFromExif?'exif':'default'};
   queue.push(item);
   const m=L.marker([lat,lng],{icon:mkIcon(id,'#00d4ff')}).addTo(map);
   // Fix: use id to lookup from queue at click time — avoids stale closure
@@ -1248,6 +1277,67 @@ function addToQueue({imgData,lat,lng,accuracy,filename,timestamp,gpsFromExif}){
   document.getElementById('feedEmpty')?.remove();
 }
 
+// ── MANUAL GPS FIX — for photos whose real GPS wasn't readable from EXIF ──
+// (common cause: photos sent as a WhatsApp "photo" get recompressed and lose
+// all EXIF, including GPS — even though the original photo had it. Sending
+// as a "Document" in WhatsApp avoids this, but this manual fix always works
+// as a fallback regardless of how the photo arrived.)
+let gpsEditingId = null;
+let pickingLocationMode = false;
+function openGpsEdit(id){
+  const item = queue.find(p=>p.id===id);
+  if(!item) return;
+  gpsEditingId = id;
+  document.getElementById('gpsEditId').textContent = id;
+  document.getElementById('gpsEditLat').value = item.lat;
+  document.getElementById('gpsEditLng').value = item.lng;
+  document.getElementById('gpsEditModal').classList.add('show');
+}
+function closeGpsEdit(){
+  document.getElementById('gpsEditModal').classList.remove('show');
+  gpsEditingId = null;
+}
+function saveGpsEdit(){
+  const item = queue.find(p=>p.id===gpsEditingId);
+  if(!item) return;
+  const lat = parseFloat(document.getElementById('gpsEditLat').value);
+  const lng = parseFloat(document.getElementById('gpsEditLng').value);
+  if(isNaN(lat) || isNaN(lng)){ alert('Please enter valid latitude and longitude numbers.'); return; }
+  applyManualGps(item, lat, lng);
+  closeGpsEdit();
+}
+function pickLocationOnMap(){
+  pickingLocationMode = true;
+  document.getElementById('gpsEditModal').classList.remove('show');
+  document.getElementById('mapPickHint').style.display = '';
+  // Make sure the map view is actually visible while picking
+  switchView('map');
+}
+function applyManualGps(item, lat, lng, source){
+  item.lat = lat; item.lng = lng; item.accuracy = 3; item.gpsFromExif = false; item.gpsSource = source || 'manual';
+  mkrs[item.id]?.setLatLng([lat, lng]);
+  poly.setLatLngs(queue.map(p=>[p.lat,p.lng]));
+  renderFeed(); updateHeatmap();
+  if(currentPopupItem && currentPopupItem.id === item.id) showPopup(item);
+}
+function gpsSourceLabel(item){
+  switch(item.gpsSource){
+    case 'exif': return 'EXIF (from photo)';
+    case 'manual': return 'Manually set';
+    case 'overlay-ocr': return 'Auto-read from photo overlay';
+    case 'default': return '⚠ Not detected (approximate)';
+    default: return item.gpsFromExif ? 'EXIF (from photo)' : 'Live GPS';
+  }
+}
+map.on('click', function(e){
+  if(!pickingLocationMode) return;
+  const item = queue.find(p=>p.id===gpsEditingId);
+  if(item) applyManualGps(item, +e.latlng.lat.toFixed(6), +e.latlng.lng.toFixed(6));
+  pickingLocationMode = false;
+  document.getElementById('mapPickHint').style.display = 'none';
+  gpsEditingId = null;
+});
+
 function renderFeed(){
   const feed=document.getElementById('feed');
   feed.querySelectorAll('.feed-item').forEach(e=>e.remove());
@@ -1256,7 +1346,9 @@ function renderFeed(){
     const dc={pending:'s-pending',processing:'s-processing',done:'s-done',error:'s-error'}[item.status]||'s-pending';
     const risk=item.aiData?.overall_risk;const rc=risk?riskColor(risk):'';
     const rb=risk?`<span class="risk-badge" style="background:${rc}22;color:${rc};border:1px solid ${rc}44;">${risk}</span>`:'';
-    el.innerHTML=`<img src="${item.imgData}" alt=""/><div class="fi"><div class="fn"><span class="s-dot ${dc}"></span>#${item.id} ${rb}</div><div class="fc">${item.lat.toFixed(4)}, ${item.lng.toFixed(4)}</div></div>`;
+    const isApprox = item.gpsSource==='default';
+    const gpsWarn = isApprox ? `<div class="fi-approx-badge">⚠ location not detected — may be wrong</div>` : '';
+    el.innerHTML=`<img src="${item.imgData}" alt=""/><div class="fi"><div class="fn"><span class="s-dot ${dc}"></span>#${item.id} ${rb}</div><div class="fc">${item.lat.toFixed(4)}, ${item.lng.toFixed(4)}</div>${gpsWarn}<button class="fi-fix-btn" onclick="event.stopPropagation();openGpsEdit(${item.id})">📍 ${isApprox?'Set location':'Fix location'}</button></div>`;
     el.addEventListener('click',()=>{showPopup(item);map.panTo([item.lat,item.lng]);document.querySelectorAll('.feed-item').forEach(e=>e.classList.remove('on'));el.classList.add('on');});
     feed.appendChild(el);
   });
@@ -1286,7 +1378,20 @@ document.getElementById('btnAnalyze').addEventListener('click',async()=>{
   for(const item of pending){
     item.status='processing';renderFeed();
     document.getElementById('progText').textContent=`Auditing location ${item.id} of ${total}...`;
-    try{const b64=item.imgData.split(',')[1];const data=await callGroq(b64);item.aiData=data;item.status='done';mkrs[item.id]?.setIcon(mkIcon(item.id,riskColor(data.overall_risk)));}catch(e){item.status='error';console.error(e);}
+    try{
+      const b64=item.imgData.split(',')[1];
+      const data=await callGroq(b64);
+      item.aiData=data;item.status='done';
+      // If we never had a trustworthy location for this photo (no EXIF, not
+      // manually fixed already), and the AI found legible printed coordinates
+      // burned into the photo (e.g. GPS Map Camera-style overlay), use those
+      // automatically — this is exactly the case where WhatsApp compression
+      // strips EXIF GPS but the visible overlay numbers survive.
+      if(item.gpsSource==='default' && data.overlay_gps?.visible && typeof data.overlay_gps.lat==='number' && typeof data.overlay_gps.lng==='number'){
+        applyManualGps(item, data.overlay_gps.lat, data.overlay_gps.lng, 'overlay-ocr');
+      }
+      mkrs[item.id]?.setIcon(mkIcon(item.id,riskColor(data.overall_risk)));
+    }catch(e){item.status='error';console.error(e);}
     done++;document.getElementById('progFill').style.width=`${(done/total)*100}%`;document.getElementById('progText').textContent=`${done} / ${total} audited`;
     renderFeed();updateStats();updateHeatmap();updateSummary();refreshChokepointMarkers();
     // 4 sec delay — Gemini free tier = 15 RPM limit
@@ -1528,7 +1633,7 @@ function showPopup(item){
      <div class="pop-meta-item">Lng <span>${item.lng.toFixed(6)}</span></div>
      <div class="pop-meta-item">Accuracy <span>±${item.accuracy}m</span></div>
      <div class="pop-meta-item">Time <span>${new Date(item.timestamp).toLocaleString()}</span></div>
-     <div class="pop-meta-item">GPS <span>${item.gpsFromExif?'EXIF (Insta 360)':'Live GPS'}</span></div>`;
+     <div class="pop-meta-item">GPS <span>${gpsSourceLabel(item)}</span> <button class="fi-fix-btn" style="margin-left:6px;" onclick="openGpsEdit(${item.id})">📍 Fix</button></div>`;
 
   // QUANTIFICATION CARD
   const qc = document.getElementById('quantCard');
@@ -2672,7 +2777,7 @@ document.getElementById('btnReport').addEventListener('click',()=>{
   document.getElementById('reportOvl').classList.add('show');
 });
 
-function exportCSV(){const done=queue.filter(p=>p.status==='done'&&p.aiData);if(!done.length){alert('Run audit first!');return;}const headers=['Photo ID','Latitude','Longitude','Accuracy (m)','Timestamp','GPS Source','Overall Risk',...HAZARD_IDS.map(id=>FEATURE_NAMES[id]+' Severity'),...HAZARD_IDS.map(id=>FEATURE_NAMES[id]+' Confidence'),...HAZARD_IDS.map(id=>FEATURE_NAMES[id]+' Visual Evidence'),'Scene Summary','Inspector Note'];const rows=done.map(item=>{const f={};item.aiData.findings?.forEach(fi=>{f[fi.id]=fi;});return[item.id,item.lat.toFixed(7),item.lng.toFixed(7),item.accuracy,new Date(item.timestamp).toISOString(),item.gpsFromExif?'EXIF':'Live GPS',item.aiData.overall_risk,...HAZARD_IDS.map(id=>f[id]?.severity||'NONE'),...HAZARD_IDS.map(id=>f[id]?.confidence||0),...HAZARD_IDS.map(id=>`"${(f[id]?.visual_evidence||'').replace(/"/g,'""')}"`),`"${(item.aiData.scene_summary||'').replace(/"/g,'""')}"`,`"${(item.aiData.inspector_note||'').replace(/"/g,'""')}"`];});const csv=[headers.join(','),...rows.map(r=>r.join(','))].join('\n');const blob=new Blob([csv],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`kumbh-audit-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);}
+function exportCSV(){const done=queue.filter(p=>p.status==='done'&&p.aiData);if(!done.length){alert('Run audit first!');return;}const headers=['Photo ID','Latitude','Longitude','Accuracy (m)','Timestamp','GPS Source','Overall Risk',...HAZARD_IDS.map(id=>FEATURE_NAMES[id]+' Severity'),...HAZARD_IDS.map(id=>FEATURE_NAMES[id]+' Confidence'),...HAZARD_IDS.map(id=>FEATURE_NAMES[id]+' Visual Evidence'),'Scene Summary','Inspector Note'];const rows=done.map(item=>{const f={};item.aiData.findings?.forEach(fi=>{f[fi.id]=fi;});return[item.id,item.lat.toFixed(7),item.lng.toFixed(7),item.accuracy,new Date(item.timestamp).toISOString(),item.gpsSource||(item.gpsFromExif?'exif':'default'),item.aiData.overall_risk,...HAZARD_IDS.map(id=>f[id]?.severity||'NONE'),...HAZARD_IDS.map(id=>f[id]?.confidence||0),...HAZARD_IDS.map(id=>`"${(f[id]?.visual_evidence||'').replace(/"/g,'""')}"`),`"${(item.aiData.scene_summary||'').replace(/"/g,'""')}"`,`"${(item.aiData.inspector_note||'').replace(/"/g,'""')}"`];});const csv=[headers.join(','),...rows.map(r=>r.join(','))].join('\n');const blob=new Blob([csv],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`kumbh-audit-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);}
 
 // ── PDF EXPORT — with photos + evidence ──────────────────────
 // ── DASHBOARD ────────────────────────────────────────────────
@@ -2857,7 +2962,7 @@ function exportPDF(){
         <div class="loc-head" style="border-left:4px solid ${rc};">
           <div class="loc-num">Location #${item.id}</div>
           <div class="loc-risk" style="color:${rc};">${item.aiData.overall_risk} RISK</div>
-          <div class="loc-meta">${item.lat.toFixed(5)}, ${item.lng.toFixed(5)} &nbsp;|&nbsp; ${new Date(item.timestamp).toLocaleString()} &nbsp;|&nbsp; GPS: ${item.gpsFromExif?'EXIF':'Live'}</div>
+          <div class="loc-meta">${item.lat.toFixed(5)}, ${item.lng.toFixed(5)} &nbsp;|&nbsp; ${new Date(item.timestamp).toLocaleString()} &nbsp;|&nbsp; GPS: ${gpsSourceLabel(item)}</div>
         </div>
         <div class="loc-body">
           <img src="${item.imgData}" class="loc-img" alt="Field photo #${item.id}"/>
