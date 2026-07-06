@@ -1263,7 +1263,7 @@ async function loadPhotos(files){const arr=Array.from(files).filter(f=>f.type.st
 
 function addToQueue({imgData,lat,lng,accuracy,filename,timestamp,gpsFromExif}){
   const id=queue.length+1;
-  const item={id,imgData,lat,lng,accuracy:accuracy||0,filename:filename||`Photo ${id}`,timestamp:timestamp||new Date().toISOString(),status:'pending',aiData:null,gpsFromExif,gpsSource:gpsFromExif?'exif':'default'};
+  const item={id,imgData,lat,lng,accuracy:accuracy||0,filename:filename||`Photo ${id}`,timestamp:timestamp||new Date().toISOString(),status:'pending',aiData:null,gpsFromExif,gpsSource:gpsFromExif?'exif':'default',_displayLat:lat,_displayLng:lng};
   queue.push(item);
   const m=L.marker([lat,lng],{icon:mkIcon(id,'#00d4ff')}).addTo(map);
   // Fix: use id to lookup from queue at click time — avoids stale closure
@@ -1273,11 +1273,58 @@ function addToQueue({imgData,lat,lng,accuracy,filename,timestamp,gpsFromExif}){
     if(found) showPopup(found);
   });
   mkrs[id]=m;
-  poly.setLatLngs(queue.map(p=>[p.lat,p.lng]));
+  recomputeMarkerOffsets();
   renderFeed();updateStats();
   document.getElementById('btnAnalyze').disabled=false;
   document.getElementById('btnClear').disabled=false;
   document.getElementById('feedEmpty')?.remove();
+}
+
+// ── MARKER FAN-OUT — multiple photos taken at (near) the exact same GPS point ──
+// (e.g. several angles of the same ghat) would otherwise stack into one
+// unclickable pin. This spreads them in a small circle around the real point,
+// purely for map DISPLAY — item.lat/item.lng (the true, reported coordinates
+// used everywhere else: popup, CSV, PDF report) are never touched.
+let clusterRings = [];
+function recomputeMarkerOffsets(){
+  clusterRings.forEach(c=>map.removeLayer(c));
+  clusterRings = [];
+  const used = new Array(queue.length).fill(false);
+  const groups = [];
+  queue.forEach((item, i) => {
+    if(used[i]) return;
+    const group = [item];
+    used[i] = true;
+    for(let j=i+1;j<queue.length;j++){
+      if(used[j]) continue;
+      const other = queue[j];
+      const dLatM = (item.lat - other.lat) * 111000;
+      const dLngM = (item.lng - other.lng) * 111000 * Math.cos(item.lat*Math.PI/180);
+      if(Math.sqrt(dLatM*dLatM + dLngM*dLngM) < 6){ group.push(other); used[j]=true; }
+    }
+    groups.push(group);
+  });
+  groups.forEach(group=>{
+    if(group.length === 1){
+      const it = group[0];
+      it._displayLat = it.lat; it._displayLng = it.lng;
+      return;
+    }
+    const n = group.length;
+    const radiusM = Math.min(24, 8 + n*1.1); // small circle, grows gently with photo count
+    const cLat = group.reduce((s,p)=>s+p.lat,0)/n, cLng = group.reduce((s,p)=>s+p.lng,0)/n;
+    group.forEach((it, idx)=>{
+      const angle = (2*Math.PI*idx/n) - Math.PI/2;
+      const dLatM = radiusM * Math.sin(angle), dLngM = radiusM * Math.cos(angle);
+      it._displayLat = cLat + dLatM/111000;
+      it._displayLng = cLng + dLngM/(111000*Math.cos(cLat*Math.PI/180));
+    });
+    // faint dashed ring showing these pins are really all the same spot
+    const ring = L.circle([cLat,cLng], {radius:radiusM+4, color:'#8b96a5', weight:1, dashArray:'3,4', fill:false, opacity:0.5, interactive:false}).addTo(map);
+    clusterRings.push(ring);
+  });
+  queue.forEach(it=>{ mkrs[it.id]?.setLatLng([it._displayLat, it._displayLng]); });
+  poly.setLatLngs(queue.map(p=>[p._displayLat, p._displayLng]));
 }
 
 // ── MANUAL GPS FIX — for photos whose real GPS wasn't readable from EXIF ──
@@ -1318,8 +1365,7 @@ function pickLocationOnMap(){
 }
 function applyManualGps(item, lat, lng, source){
   item.lat = lat; item.lng = lng; item.accuracy = 3; item.gpsFromExif = false; item.gpsSource = source || 'manual';
-  mkrs[item.id]?.setLatLng([lat, lng]);
-  poly.setLatLngs(queue.map(p=>[p.lat,p.lng]));
+  recomputeMarkerOffsets();
   renderFeed(); updateHeatmap();
   if(currentPopupItem && currentPopupItem.id === item.id) showPopup(item);
 }
@@ -1357,7 +1403,7 @@ function renderFeed(){
     const isApprox = item.gpsSource==='default';
     const gpsWarn = isApprox ? `<div class="fi-approx-badge">⚠ location not detected — may be wrong</div>` : '';
     el.innerHTML=`<img src="${item.imgData}" alt=""/><div class="fi"><div class="fn"><span class="s-dot ${dc}"></span>#${item.id} ${rb}</div><div class="fc">${item.lat.toFixed(4)}, ${item.lng.toFixed(4)}</div>${gpsWarn}<button class="fi-fix-btn" onclick="event.stopPropagation();openGpsEdit(${item.id})">📍 ${isApprox?'Set location':'Fix location'}</button></div>`;
-    el.addEventListener('click',()=>{showPopup(item);map.panTo([item.lat,item.lng]);document.querySelectorAll('.feed-item').forEach(e=>e.classList.remove('on'));el.classList.add('on');});
+    el.addEventListener('click',()=>{showPopup(item);map.panTo([item._displayLat??item.lat,item._displayLng??item.lng]);document.querySelectorAll('.feed-item').forEach(e=>e.classList.remove('on'));el.classList.add('on');});
     feed.appendChild(el);
   });
 }
@@ -1419,6 +1465,7 @@ document.getElementById('btnClear').addEventListener('click',()=>{
   if(!confirm('Clear all audit data?'))return;
   stopPlayback();
   queue.forEach(p=>mkrs[p.id]?.remove());heatCircles.forEach(c=>map.removeLayer(c));
+  clusterRings.forEach(c=>map.removeLayer(c));clusterRings=[];
   queue=[];mkrs={};heatCircles=[];poly.setLatLngs([]);
   document.getElementById('feed').innerHTML='<div class="feed-empty" id="feedEmpty"><div class="ei">🗺️</div>Import JSON or photos<br>to begin field audit</div>';
   ['btnAnalyze','btnClear','btnReport','btnPlayback','btnExportPDF','btnExportCSV'].forEach(id=>document.getElementById(id).disabled=true);
@@ -1453,7 +1500,7 @@ function startPlayback() {
 
   // Zoom out to show full area
   if(audited.length>1) map.fitBounds(audited.map(p=>[p.lat,p.lng]),{padding:[80,80]});
-  else map.setView([audited[0].lat,audited[0].lng],16);
+  else map.setView([audited[0]._displayLat??audited[0].lat,audited[0]._displayLng??audited[0].lng],16);
 
   document.getElementById('pbOvl').classList.add('show');
   map.invalidateSize();
@@ -1470,7 +1517,7 @@ function stopPlayback() {
   queue.forEach(p=>{ mkrs[p.id]?.setOpacity(1); });
   if(pbPolyline){map.removeLayer(pbPolyline);pbPolyline=null;}
   // Restore poly
-  poly.setLatLngs(queue.map(p=>[p.lat,p.lng]));
+  poly.setLatLngs(queue.map(p=>[p._displayLat??p.lat,p._displayLng??p.lng]));
   map.invalidateSize();
 }
 
@@ -1535,7 +1582,7 @@ function revealFrame(i, audited){
     mkrs[item.id]?.setOpacity(1);
     pbRevealedMkrs[item.id]=true;
   }
-  pbPolyline.setLatLngs(audited.slice(0,i+1).map(p=>[p.lat,p.lng]));
+  pbPolyline.setLatLngs(audited.slice(0,i+1).map(p=>[p._displayLat??p.lat,p._displayLng??p.lng]));
 }
 
 function showPbFrame(idx, audited, skipReveal=false){
@@ -1551,7 +1598,7 @@ function showPbFrame(idx, audited, skipReveal=false){
   mkrs[item.id]?.setIcon(mkIconLarge(item.id,c));
 
   // Pan to location
-  map.panTo([item.lat,item.lng],{animate:true,duration:0.6});
+  map.panTo([item._displayLat??item.lat,item._displayLng??item.lng],{animate:true,duration:0.6});
 
   // Update scrubber
   const pct=(idx/(audited.length-1))*100;
