@@ -95,7 +95,10 @@ FOOTPATH PROOF REQUIREMENT — STRICT:
   (c) the surface is walkable width (at least 0.5m clear width visible)
 - If ANY of these three is missing or unclear → use "partial" (one or two present) or "no" (none present)
 - If road surface and footpath are at the SAME level with no visible separation → "no"
-- footpath_evidence: one sentence EXPLAINING what exactly you saw that made you decide yes/partial/no. This is mandatory — never leave it blank. Example: "Raised concrete strip visible on left side separated from road by 5cm kerb" or "Road and footpath at same level, no kerb visible, cannot confirm separation."
+- DO NOT assume a footpath exists just because this looks like a typical Indian urban/market road — many such roads genuinely have NO footpath at all. Judge only this specific photo.
+- A painted line, edge shadow, or color/texture change alone is NOT a physical boundary — you must see an actual raised kerb or level difference, or use "no"/"partial".
+- DEFAULT BIAS: if you are not confident, answer "no". A missed footpath is a minor loss of detail; a false "yes" gives pilgrims wrong safety information about available walking space — treat that as the worse error.
+- footpath_evidence: one sentence EXPLAINING what exactly you saw that made you decide yes/partial/no. This is mandatory — never leave it blank. Write it as a factual, non-hedging statement — if you are unsure, that uncertainty itself should make you answer "no"/"partial", not appear as hedging words inside a "yes" answer. Example: "Raised concrete strip visible on left side separated from road by 5cm kerb" or "Road and footpath at same level, no kerb visible, cannot confirm separation."
 
 OVERLAY GPS TEXT (many field-survey camera apps like "GPS Map Camera" burn a text/map overlay directly onto the photo, showing printed decimal latitude/longitude numbers, e.g. "Latitude 20.003442, Longitude 73.793695"):
 - Look for such a printed overlay panel, usually along the bottom or a corner of the image.
@@ -400,6 +403,7 @@ Respond ONLY with this JSON (no markdown, no extra text):
       // ── YOLO CROSS-VERIFICATION (parallel, non-blocking) ──
       const yoloServiceUrl = process.env.YOLO_SERVICE_URL;
       let yoloPromise = Promise.resolve(null);
+      let yoloStatus = 'not_configured'; // surfaced in response so the frontend/logs can show WHY yolo didn't run
       if (yoloServiceUrl && parsed.quantification) {
         try {
           // Railway free tier sleeps after 15 min inactivity — first request can
@@ -424,6 +428,7 @@ Respond ONLY with this JSON (no markdown, no extra text):
           // Netlify's 10s function limit when Groq call takes ~3-4s
           const yoloTimeout = setTimeout(() => yoloController.abort(), 7000);
 
+          yoloStatus = 'attempted';
           yoloPromise = fetch(`${yoloServiceUrl}/detect`, {
             method: 'POST',
             headers: {
@@ -434,13 +439,31 @@ Respond ONLY with this JSON (no markdown, no extra text):
             signal: yoloController.signal
           }).then(async r => {
             clearTimeout(yoloTimeout);
-            if (r.ok) return r.json();
+            if (r.ok) { yoloStatus = 'success'; return r.json(); }
+            yoloStatus = `http_error_${r.status}`;
+            console.error(`YOLO service returned HTTP ${r.status}`);
             return null;
-          }).catch(() => null);
-        } catch(e) { /* silent */ }
+          }).catch(err => {
+            // Was it our own 7s timeout (likely cold-start) or something else?
+            yoloStatus = err?.name === 'AbortError' ? 'timeout_likely_cold_start' : `fetch_error_${err?.message || 'unknown'}`;
+            console.error('YOLO service call failed:', err?.message || err);
+            return null;
+          });
+        } catch(e) {
+          yoloStatus = `setup_error_${e?.message || 'unknown'}`;
+          console.error('YOLO setup failed:', e?.message || e);
+        }
+      } else if (!yoloServiceUrl) {
+        console.error('YOLO_SERVICE_URL env var is not set — skipping YOLO verification entirely.');
       }
 
       const yoloData = await yoloPromise;
+      if (parsed.quantification) {
+        // Always surfaced, even on failure — lets the UI/logs show exactly
+        // why YOLO verification is or isn't present for this photo, instead
+        // of silently looking like it was never wired up at all.
+        parsed.quantification.yolo_status = yoloStatus;
+      }
       if (yoloData && parsed.quantification) {
         const groqPed = parsed.quantification.pedestrian_count || 0;
         const groqVeh = parsed.quantification.vehicle_count || 0;

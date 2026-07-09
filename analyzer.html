@@ -1088,6 +1088,54 @@ function normalizeArea(raw){
   return { min, max, mid:num, display:`~${min}-${max} sqm (approx. — AI gave single estimate ${num} sqm)`, approximated:true };
 }
 
+// ── FOOTPATH RELIABILITY CHECK (centralized) ──────────────────────
+// The AI's footpath claim is a single-photo visual judgment and can be a
+// false positive — this checks MULTIPLE signals, not just vehicle count,
+// and is used consistently everywhere a footpath claim is shown or relied
+// on (capacity calc, popup card, PDF), so the UI never looks confident
+// about a claim we don't actually trust.
+function evaluateFootpathReliability(q){
+  const claims = (q.footpath_present==='yes' || q.footpath_present==='partial') && q.footpath_width_meters>0;
+  if(!claims) return { claims:false, trusted:false, reasons:[] };
+
+  const reasons = [];
+
+  // 1) Dense parking commonly encroaches onto or hides a footpath, and at
+  //    road-level (no raised kerb) a vision model can confuse footpath with
+  //    road when cars line the edge. Our own threshold, chosen conservatively.
+  if((q.vehicle_count||0) >= 6){
+    reasons.push(`${q.vehicle_count} vehicles visible in frame — dense parking often hides/encroaches a footpath`);
+  }
+
+  // 2) AI itself only said "partial" — by definition an unconfirmed match
+  //    against the prompt's own 3-criteria footpath test.
+  if(q.footpath_present === 'partial'){
+    reasons.push('AI marked this as only a "partial" match, not a confirmed footpath');
+  }
+
+  // 3) Claimed width is below what the AI's own prompt requires as the
+  //    minimum walkable width (0.5m) — internally inconsistent claim.
+  if(q.footpath_width_meters && q.footpath_width_meters < 0.5){
+    reasons.push(`Claimed width (${q.footpath_width_meters}m) is below walkable minimum — internally inconsistent`);
+  }
+
+  // 4) The AI's own evidence sentence hedges — if the AI wasn't sure enough
+  //    to write a confident sentence, we shouldn't be confident either.
+  const ev = (q.footpath_evidence||'').toLowerCase();
+  const hedgeWords = ['unclear','not clear','not certain','uncertain','cannot confirm',"can't confirm",'possibly','may be','appears to','hard to tell','not sure','ambiguous','same level','no kerb','no visible'];
+  const hedgeHit = hedgeWords.find(w=>ev.includes(w));
+  if(hedgeHit){
+    reasons.push(`AI's own evidence text hedges ("${hedgeHit}")`);
+  }
+
+  // 5) No evidence text at all, despite the prompt making it mandatory.
+  if(!q.footpath_evidence){
+    reasons.push('No supporting evidence text was provided for this claim');
+  }
+
+  return { claims:true, trusted: reasons.length===0, reasons };
+}
+
 function computeCrowdFlow(q){
   if(!q || !q.road_width_meters) return null;
   // Use the normalized width band. For the SAFE capacity calc we still use
@@ -1101,17 +1149,12 @@ function computeCrowdFlow(q){
   if(!roadW) return null;
   const claimsFootpath = (q.footpath_present==='yes'||q.footpath_present==='partial') && q.footpath_width_meters>0;
 
-  // Reliability check: the AI's footpath claim is less trustworthy when a lot
-  // of vehicles are visible in the same frame. Two reasons:
-  // 1) Dense parking commonly encroaches onto or hides a footpath, so a width
-  //    estimated from one photo may already be partly blocked in practice.
-  // 2) When a footpath sits at road level with no raised curb, a vision model
-  //    can struggle to tell footpath from road, especially with cars parked
-  //    along the edge (as observed in this project's testing).
-  // This is OUR OWN heuristic, not from any external standard — threshold
-  // chosen conservatively at 6+ vehicles in frame.
-  const footpathUncertain = claimsFootpath && (q.vehicle_count||0) >= 6;
-  const hasFootpath = claimsFootpath && !footpathUncertain;
+  // Reliability check now covers multiple signals (vehicle density, partial
+  // match, internally-inconsistent width, hedging evidence text) — see
+  // evaluateFootpathReliability() above. Not just a vehicle-count check.
+  const footpathCheck = evaluateFootpathReliability(q);
+  const footpathUncertain = claimsFootpath && !footpathCheck.trusted;
+  const hasFootpath = claimsFootpath && footpathCheck.trusted;
 
   // Effective pedestrian-usable width — documented assumption:
   // - If a dedicated, reliably-claimed footpath exists, pilgrims primarily use that.
@@ -1147,10 +1190,10 @@ function computeCrowdFlow(q){
   const basis = hasFootpath
     ? 'footpath width'
     : footpathUncertain
-      ? `70% of road width (footpath claim unverified — ${q.vehicle_count} vehicles in frame)`
+      ? `70% of road width (footpath claim unverified — ${footpathCheck.reasons.join('; ')})`
       : '70% of road width (no dedicated footpath)';
 
-  return { effectiveWidth, hasFootpath, footpathUncertain, claimedFlow, maxSafeFlow, maxSafeFlowUpper, density, densityLOS, basis, widthBand: wBand, roadWDisplay };
+  return { effectiveWidth, hasFootpath, footpathUncertain, footpathReasons: footpathCheck.reasons, claimedFlow, maxSafeFlow, maxSafeFlowUpper, density, densityLOS, basis, widthBand: wBand, roadWDisplay };
 }
 
 // ── BOTTLENECK / CHOKEPOINT DETECTION ───────────────────────────
@@ -1319,11 +1362,20 @@ async function callGroq(b64){
       footpath_width_meters: quant.footpath_width_meters || null,
       footpath_condition: quant.footpath_condition || '',
       footpath_evidence: quant.footpath_evidence || '',
+      // YOLO cross-verification fields — these were being computed correctly
+      // on the backend but silently dropped here because this whitelist
+      // didn't include them, so the UI never saw them no matter what the
+      // YOLO service returned. This was the actual "YOLO not showing" bug.
+      pedestrian_count_yolo: quant.pedestrian_count_yolo ?? null,
+      vehicle_count_yolo: quant.vehicle_count_yolo ?? null,
+      count_verification: quant.count_verification || null,
+      verification_source: quant.verification_source || null,
+      yolo_status: quant.yolo_status || null,
       yes_no_summary: {
         waterlogging: ynRaw.waterlogging || 'no',
         bottleneck: ynRaw.bottleneck || 'no',
         crowd_risk: ynRaw.crowd_risk || 'no',
-        footpath_available: ynRaw.footpath_available || ((quant.footpath_present==='yes'||quant.footpath_present==='partial') ? 'yes' : 'no'),
+        footpath_available: ynRaw.footpath_available || (evaluateFootpathReliability(quant).trusted ? 'yes' : 'no'),
         vehicle_conflict: ynRaw.vehicle_conflict || 'no',
         good_lighting: ynRaw.good_lighting || 'yes',
         signage_present: ynRaw.signage_present || ((quant.signboards_text&&quant.signboards_text.length) ? 'yes' : 'no'),
@@ -1846,7 +1898,15 @@ function showPopup(item){
         yoloWrap.style.display='';
       }
     } else {
-      if(pedVerifyEl) pedVerifyEl.innerHTML=`<span style="color:var(--text3);font-size:0.52rem;">YOLO: not available this frame</span>`;
+      // Show WHY, not just "not available" — helps diagnose config vs cold-start
+      // vs a real error, instead of it looking like YOLO was never wired up.
+      const statusMsgs = {
+        not_configured: 'YOLO_SERVICE_URL not set on the backend',
+        timeout_likely_cold_start: 'timed out — service may be waking up (Railway free tier sleeps), try again',
+      };
+      const yoloStatus = q.yolo_status;
+      const msg = statusMsgs[yoloStatus] || (yoloStatus ? `error: ${yoloStatus}` : 'not available this frame');
+      if(pedVerifyEl) pedVerifyEl.innerHTML=`<span style="color:var(--text3);font-size:0.52rem;">YOLO: ${msg}</span>`;
       if(yoloWrap) yoloWrap.style.display='none';
     }
     document.getElementById('quantVeh').textContent = q.vehicle_count ?? '0';
@@ -1889,7 +1949,7 @@ function showPopup(item){
       const flowWarn = document.getElementById('quantFlowWarn');
       if(flow.footpathUncertain){
         flowWarn.style.display='';
-        flowWarn.innerHTML = `⚠ AI reported a footpath here, but ${q.vehicle_count} vehicles are visible in this frame — dense parking often hides/encroaches a footpath, so we don't trust that claim alone. Capacity above uses the more conservative road-width estimate. <i>If a real, clear footpath exists, capacity could be up to ${flow.claimedFlow} pilgrims/min — verify on-site.</i>`;
+        flowWarn.innerHTML = `⚠ AI reported a footpath here, but we don't trust that claim alone: ${(flow.footpathReasons||[]).join('; ')}. Capacity above uses the more conservative road-width estimate. <i>If a real, clear footpath exists, capacity could be up to ${flow.claimedFlow} pilgrims/min — verify on-site.</i>`;
       } else {
         flowWarn.style.display='none';
       }
@@ -1902,8 +1962,14 @@ function showPopup(item){
     // Footpath
     const footWrap = document.getElementById('quantFootWrap');
     if(q.footpath_present && q.footpath_present !== 'no'){
+      const unverified = flow && flow.footpathUncertain;
+      // Badge itself now reflects trust — green ONLY when verified; amber +
+      // "UNVERIFIED" label when we don't trust the claim, instead of a
+      // confident-looking green badge with an easy-to-miss warning below it.
       const fpColors = {yes:'var(--green)',partial:'var(--amber)'};
-      document.getElementById('quantFootVal').innerHTML = `<span style="color:${fpColors[q.footpath_present]||'var(--text)'}">Present: ${q.footpath_present.toUpperCase()} · Side: ${q.footpath_location||'—'} · Width: ${q.footpath_width_meters||'?'}m</span>`;
+      const badgeColor = unverified ? 'var(--amber)' : (fpColors[q.footpath_present]||'var(--text)');
+      const badgeLabel = unverified ? `${q.footpath_present.toUpperCase()} (UNVERIFIED)` : q.footpath_present.toUpperCase();
+      document.getElementById('quantFootVal').innerHTML = `<span style="color:${badgeColor}">Present: ${badgeLabel} · Side: ${q.footpath_location||'—'} · Width: ${q.footpath_width_meters||'?'}m</span>`;
       document.getElementById('quantFootDetail').textContent = `Condition: ${q.footpath_condition||'unknown'}`;
       // Show AI's evidence/reasoning for footpath claim
       const footEv = document.getElementById('quantFootEvidence');
@@ -1911,7 +1977,13 @@ function showPopup(item){
         footEv.textContent = `👁 AI evidence: "${q.footpath_evidence}"`;
         footEv.style.display='';
       } else { footEv.style.display='none'; }
-      document.getElementById('quantFootWarn').style.display = (flow && flow.footpathUncertain) ? '' : 'none';
+      const footWarnEl = document.getElementById('quantFootWarn');
+      if(unverified){
+        footWarnEl.style.display='';
+        footWarnEl.textContent = `⚠ Unverified — ${(flow.footpathReasons||[]).join('; ') || 'low confidence claim'}. Capacity numbers use the more conservative road-width estimate instead.`;
+      } else {
+        footWarnEl.style.display='none';
+      }
       footWrap.style.display='';
     } else footWrap.style.display='none';
 
@@ -2974,7 +3046,7 @@ function updateDashboard(){
   // ── STAT CARDS ──
   const walkable = done.filter(p=>p.aiData.quantification?.walkability==='yes').length;
   const notWalkable = done.filter(p=>p.aiData.quantification?.walkability==='no').length;
-  const hasFootpath = done.filter(p=>p.aiData.quantification?.footpath_present==='yes'||p.aiData.quantification?.footpath_present==='partial').length;
+  const hasFootpath = done.filter(p=>evaluateFootpathReliability(p.aiData.quantification||{}).trusted).length;
   const obstructed = done.filter(p=>{const yns=p.aiData.quantification?.yes_no_summary;return yns?.obstruction_present==='yes';}).length;
   const critical = done.filter(p=>p.aiData.overall_risk==='CRITICAL').length;
   const high = done.filter(p=>p.aiData.overall_risk==='HIGH').length;
@@ -3101,7 +3173,7 @@ function exportPDF(){
         <span class="qt"><b>Intersection:</b> ${q.intersection_type||'—'}</span>
         <span class="qt"><b>Motion:</b> ${q.motion_direction||'—'}</span>
         ${q.walkability?`<span class="qt"><b>Walkable:</b> ${q.walkability.toUpperCase()}${q.walkability_reason?' — '+q.walkability_reason:''}</span>`:''}
-        ${q.footpath_present&&q.footpath_present!=='no'?`<span class="qt"><b>Footpath:</b> ${q.footpath_present} · ${q.footpath_location||'?'} side · W:${q.footpath_width_meters||'?'} · ${q.footpath_condition||'?'}</span>`:''}
+        ${q.footpath_present&&q.footpath_present!=='no'?`<span class="qt"><b>Footpath:</b> ${q.footpath_present}${evaluateFootpathReliability(q).trusted?'':' (UNVERIFIED)'} · ${q.footpath_location||'?'} side · W:${q.footpath_width_meters||'?'} · ${q.footpath_condition||'?'}</span>`:''}
         ${q.vehicle_types?.length?`<span class="qt"><b>Vehicles:</b> ${q.vehicle_types.join(', ')}</span>`:''}
         ${q.signboards_text?.length?`<span class="qt"><b>Signboards:</b> "${q.signboards_text.join('", "')}"</span>`:''}
         ${q.locality_clues?`<span class="qt"><b>Locality:</b> ${q.locality_clues}</span>`:''}
