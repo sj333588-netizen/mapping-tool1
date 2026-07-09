@@ -769,6 +769,7 @@
         <div class="qk">🛤 FOOTPATH / PAVEMENT</div>
         <div id="quantFootVal" style="font-size:0.72rem;font-weight:600;margin:3px 0 2px;">—</div>
         <div id="quantFootDetail" style="font-size:0.65rem;color:var(--text3);"></div>
+        <div id="quantFootEvidence" style="display:none;font-size:0.62rem;color:var(--cyan);margin-top:4px;font-style:italic;"></div>
         <div id="quantFootWarn" style="display:none;font-size:0.62rem;color:var(--amber);margin-top:4px;">⚠ Unverified — high vehicle count in frame, footpath claim may be inaccurate</div>
       </div>
 
@@ -1029,9 +1030,49 @@ const DENSITY_LOS_BANDS = [
 ];
 const SAFE_DESIGN_FLOW_RATE = 49; // ppl/min/m, Fruin LOS-D upper bound
 
+// ── ROAD WIDTH NORMALIZATION ─────────────────────────────────────
+// A single-photo AI width read is always an estimate, never a survey-grade
+// measurement — treating it as one exact fixed number is false precision.
+// We ask the AI for a range in the prompt, but vision models don't always
+// comply and sometimes still return a bare number. This function makes the
+// approximation reliable regardless of what the AI actually returned:
+//   - AI range string ("8-10")  -> use as-is (already an honest estimate)
+//   - AI bare number (9)        -> widen into an approximate band ourselves,
+//                                   since a single number from a photo
+//                                   estimate is not something to trust exactly
+function normalizeRoadWidth(raw){
+  if(raw===null || raw===undefined || raw==='') return null;
+  const str = String(raw).trim();
+  if(str.includes('-')){
+    const parts = str.split('-').map(s=>parseFloat(s)).filter(n=>!isNaN(n) && n>0);
+    if(parts.length>=2){
+      const min = Math.min(...parts), max = Math.max(...parts);
+      return { min, max, mid:+((min+max)/2).toFixed(1), display:`${min}-${max}m`, approximated:false };
+    }
+  }
+  const num = parseFloat(str);
+  if(isNaN(num) || num<=0) return null;
+  // Widen a bare AI number into an approximate band — narrower roads get a
+  // slightly larger relative margin since small absolute errors matter more
+  // there (this is our own conservative heuristic, not an external standard).
+  const marginPct = num<=6 ? 0.25 : num<=12 ? 0.18 : 0.15;
+  const margin = Math.max(0.5, +(num*marginPct).toFixed(1));
+  const min = +Math.max(0.5, num-margin).toFixed(1);
+  const max = +(num+margin).toFixed(1);
+  return { min, max, mid:num, display:`~${min}-${max}m (approx. — AI gave single estimate ${num}m)`, approximated:true };
+}
+
 function computeCrowdFlow(q){
   if(!q || !q.road_width_meters) return null;
-  const roadW = q.road_width_meters;
+  // Use the normalized width band. For the SAFE capacity calc we still use
+  // the lower bound (conservative), but we now carry the full band + whether
+  // it was AI-native or client-approximated, so the UI can be honest about
+  // reliability instead of presenting one bare figure.
+  const wBand = normalizeRoadWidth(q.road_width_meters);
+  if(!wBand) return null;
+  const roadW = wBand.min;
+  const roadWDisplay = `${wBand.display} (using lower bound ${roadW}m for safety)`;
+  if(!roadW) return null;
   const claimsFootpath = (q.footpath_present==='yes'||q.footpath_present==='partial') && q.footpath_width_meters>0;
 
   // Reliability check: the AI's footpath claim is less trustworthy when a lot
@@ -1053,6 +1094,11 @@ function computeCrowdFlow(q){
   //   (rest shared with / blocked by vehicle traffic), as a safety margin.
   const effectiveWidth = hasFootpath ? q.footpath_width_meters : +(roadW*0.7).toFixed(1);
   const maxSafeFlow = Math.round(effectiveWidth * SAFE_DESIGN_FLOW_RATE); // ppl/min that can safely pass at design (LOS-D) rate
+  // Upper-bound flow using the wide end of the width band — together with
+  // maxSafeFlow (lower bound) this gives an honest capacity RANGE instead of
+  // one falsely-precise number, reflecting the underlying width uncertainty.
+  const effectiveWidthUpper = hasFootpath ? q.footpath_width_meters : +(wBand.max*0.7).toFixed(1);
+  const maxSafeFlowUpper = Math.round(effectiveWidthUpper * SAFE_DESIGN_FLOW_RATE);
 
   // For transparency, also report what capacity WOULD be if the AI's footpath
   // claim were trusted as-is, so the UI can show the range when uncertain.
@@ -1078,7 +1124,7 @@ function computeCrowdFlow(q){
       ? `70% of road width (footpath claim unverified — ${q.vehicle_count} vehicles in frame)`
       : '70% of road width (no dedicated footpath)';
 
-  return { effectiveWidth, hasFootpath, footpathUncertain, claimedFlow, maxSafeFlow, density, densityLOS, basis };
+  return { effectiveWidth, hasFootpath, footpathUncertain, claimedFlow, maxSafeFlow, maxSafeFlowUpper, density, densityLOS, basis, widthBand: wBand, roadWDisplay };
 }
 
 // ── BOTTLENECK / CHOKEPOINT DETECTION ───────────────────────────
@@ -1211,7 +1257,7 @@ async function callGroq(b64){
     scene_summary:raw.scene_summary||'',
     inspector_note:raw.inspector_note||'',
     quantification: {
-      road_width_meters: quant.road_width_meters || null,
+      road_width_meters: quant.road_width_meters || null,  // can be string range "8-10" or number
       area_estimate_sqm: grossArea,
       fixed_obstacles: fixedObstacles,
       obstacle_area_sqm: +obstacleAreaTotal.toFixed(1),
@@ -1235,6 +1281,7 @@ async function callGroq(b64){
       footpath_location: quant.footpath_location || '',
       footpath_width_meters: quant.footpath_width_meters || null,
       footpath_condition: quant.footpath_condition || '',
+      footpath_evidence: quant.footpath_evidence || '',
       yes_no_summary: {
         waterlogging: ynRaw.waterlogging || 'no',
         bottleneck: ynRaw.bottleneck || 'no',
@@ -1694,7 +1741,12 @@ function showPopup(item){
   const qc = document.getElementById('quantCard');
   if(item.aiData?.quantification){
     const q = item.aiData.quantification;
-    document.getElementById('quantWidth').textContent = q.road_width_meters ? `${q.road_width_meters}m` : '—';
+    // Road width — always shown as an approximate band, never a bare fixed
+    // number. If the AI itself gave a range we use it as-is; if it gave a
+    // single number we widen it client-side (see normalizeRoadWidth).
+    const wBandForDisplay = normalizeRoadWidth(q.road_width_meters);
+    const widthDisplay = wBandForDisplay ? wBandForDisplay.display : '—';
+    document.getElementById('quantWidth').textContent = widthDisplay;
     document.getElementById('quantArea').textContent = q.area_estimate_sqm ? q.area_estimate_sqm + ' sqm' : '—';
     // Net area — show if obstacles found
     const netAreaEl = document.getElementById('quantNetArea');
@@ -1779,8 +1831,14 @@ function showPopup(item){
     const flowWrap = document.getElementById('quantFlowWrap');
     const flow = computeCrowdFlow(q);
     if(flow){
-      document.getElementById('quantFlowVal').innerHTML = `<span style="color:var(--cyan)">${flow.maxSafeFlow} pilgrims/min</span> max safe flow`;
-      document.getElementById('quantFlowDetail').textContent = `Effective width: ${flow.effectiveWidth}m (basis: ${flow.basis}) · Design rate: ${SAFE_DESIGN_FLOW_RATE} ppl/min/m (Fruin LOS-D)`;
+      // Show as a range (lower/safe bound – upper bound) rather than one bare
+      // number, since it's derived from an approximate photo width estimate.
+      const flowRangeTxt = (flow.maxSafeFlowUpper && flow.maxSafeFlowUpper !== flow.maxSafeFlow)
+        ? `${flow.maxSafeFlow}–${flow.maxSafeFlowUpper} pilgrims/min`
+        : `${flow.maxSafeFlow} pilgrims/min`;
+      document.getElementById('quantFlowVal').innerHTML = `<span style="color:var(--cyan)">${flowRangeTxt}</span> max safe flow (plan for the lower bound)`;
+      const widthNote = flow.widthBand?.approximated ? ' · width shown is an approximate band, not a precise measurement' : '';
+      document.getElementById('quantFlowDetail').textContent = `Road width: ${flow.roadWDisplay || '—'} · Effective width: ${flow.effectiveWidth}m (basis: ${flow.basis}) · Design rate: ${SAFE_DESIGN_FLOW_RATE} ppl/min/m (Fruin LOS-D)${widthNote}`;
       if(flow.density!==null){
         document.getElementById('quantFlowDensity').innerHTML = `Current density: <b style="color:${flow.densityLOS.color}">${flow.density} ppl/m² — LOS ${flow.densityLOS.label}</b>`;
       } else {
@@ -1805,6 +1863,12 @@ function showPopup(item){
       const fpColors = {yes:'var(--green)',partial:'var(--amber)'};
       document.getElementById('quantFootVal').innerHTML = `<span style="color:${fpColors[q.footpath_present]||'var(--text)'}">Present: ${q.footpath_present.toUpperCase()} · Side: ${q.footpath_location||'—'} · Width: ${q.footpath_width_meters||'?'}m</span>`;
       document.getElementById('quantFootDetail').textContent = `Condition: ${q.footpath_condition||'unknown'}`;
+      // Show AI's evidence/reasoning for footpath claim
+      const footEv = document.getElementById('quantFootEvidence');
+      if(q.footpath_evidence){
+        footEv.textContent = `👁 AI evidence: "${q.footpath_evidence}"`;
+        footEv.style.display='';
+      } else { footEv.style.display='none'; }
       document.getElementById('quantFootWarn').style.display = (flow && flow.footpathUncertain) ? '' : 'none';
       footWrap.style.display='';
     } else footWrap.style.display='none';
@@ -2985,7 +3049,7 @@ function exportPDF(){
     }).join('') + '</div>' : '';
     const quantHTML = q ? `
       <div class="quant-row">
-        <span class="qt"><b>Road Width:</b> ${q.road_width_meters?q.road_width_meters+'m':'—'}</span>
+        <span class="qt"><b>Road Width:</b> ${(normalizeRoadWidth(q.road_width_meters)||{}).display || '—'}</span>
         <span class="qt"><b>Area Est.:</b> ${q.area_estimate_sqm?q.area_estimate_sqm+' sqm':'—'}</span>
         <span class="qt"><b>Pedestrians:</b> ${q.pedestrian_count??'—'}</span>
         <span class="qt"><b>Vehicles:</b> ${q.vehicle_count??0}</span>
