@@ -82,11 +82,20 @@ CRITICAL — each hazard gets ITS OWN distinct box, pointing at that specific ha
 MEASUREMENTS: Adult shoulder ~45cm, height ~165cm | Car ~1.8m wide 4m long | Motorcycle ~2m long | Bus ~12m long
 
 IMPORTANT FOR QUANTIFICATION:
-- road_width_meters: number only (e.g. 8), use vehicles/people as scale reference
-- area_estimate_sqm: number only (e.g. 200), estimate visible ground area
+- road_width_meters: Give an APPROXIMATE RANGE, not a single number. Format: "low-high" e.g. "8-10" or "10-12". The range should reflect your uncertainty (single car visible → wider range like "6-9", multiple clear reference objects → narrower range like "10-12"). This is an AI visual estimate — a range is more honest than a false-precision single number.
+- area_estimate_sqm: Give an APPROXIMATE RANGE, not a single number, same as road_width_meters. Format: "low-high" e.g. "180-220". Reflect your uncertainty (partial/obstructed view → wider range, clear full view of the space → narrower range). A single number is false precision for a visual area estimate from one photo.
 - motion_direction: MUST be exactly one of: unidirectional / bidirectional / stationary / mixed
 - footpath_width_meters: number only (e.g. 1.5)
 - All example values in JSON below are placeholders — replace with actual observed values
+
+FOOTPATH PROOF REQUIREMENT — STRICT:
+- footpath_present must be "yes" ONLY if you can see ALL THREE of these in the photo:
+  (a) a paved/concrete/brick surface clearly SEPARATE from the vehicle road
+  (b) a visible physical boundary (raised kerb, painted line, or level difference) separating footpath from road
+  (c) the surface is walkable width (at least 0.5m clear width visible)
+- If ANY of these three is missing or unclear → use "partial" (one or two present) or "no" (none present)
+- If road surface and footpath are at the SAME level with no visible separation → "no"
+- footpath_evidence: one sentence EXPLAINING what exactly you saw that made you decide yes/partial/no. This is mandatory — never leave it blank. Example: "Raised concrete strip visible on left side separated from road by 5cm kerb" or "Road and footpath at same level, no kerb visible, cannot confirm separation."
 
 OVERLAY GPS TEXT (many field-survey camera apps like "GPS Map Camera" burn a text/map overlay directly onto the photo, showing printed decimal latitude/longitude numbers, e.g. "Latitude 20.003442, Longitude 73.793695"):
 - Look for such a printed overlay panel, usually along the bottom or a corner of the image.
@@ -138,13 +147,14 @@ Respond ONLY with this JSON (no markdown, no extra text):
   },
   "overlay_gps": {"visible": false, "lat": null, "lng": null},
   "quantification": {
-    "road_width_meters": 8,
-    "area_estimate_sqm": 200,
+    "road_width_meters": "8-10",
+    "area_estimate_sqm": "180-220",
     "intersection_type": "T-junction",
-    "footpath_present": "yes",
-    "footpath_location": "left",
+    "footpath_present": "yes|no|partial",
+    "footpath_location": "left|right|both|unknown",
     "footpath_width_meters": 1.5,
-    "footpath_condition": "clear",
+    "footpath_condition": "clear|obstructed|damaged|unknown",
+    "footpath_evidence": "one sentence: exactly what you saw that justified yes/partial/no — e.g. 'Raised concrete strip with visible kerb on left side' or 'No physical separation visible between road and walkway'",
     "pedestrian_count": 0,
     "vehicle_count": 0,
     "vehicle_types": [],

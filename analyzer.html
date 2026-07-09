@@ -1062,6 +1062,32 @@ function normalizeRoadWidth(raw){
   return { min, max, mid:num, display:`~${min}-${max}m (approx. — AI gave single estimate ${num}m)`, approximated:true };
 }
 
+// ── AREA NORMALIZATION (same idea as road width) ─────────────────
+// Area from a single photo is a rougher estimate than width (it's basically
+// width × depth, so uncertainty compounds) — so a bare fixed sqm number is
+// even less trustworthy. We ask the AI for a range in the prompt now; this
+// widens a bare number into a band too, in case the AI still doesn't comply.
+function normalizeArea(raw){
+  if(raw===null || raw===undefined || raw==='') return null;
+  const str = String(raw).trim();
+  if(str.includes('-')){
+    const parts = str.split('-').map(s=>parseFloat(s)).filter(n=>!isNaN(n) && n>0);
+    if(parts.length>=2){
+      const min = Math.min(...parts), max = Math.max(...parts);
+      return { min, max, mid:+((min+max)/2).toFixed(1), display:`${min}-${max} sqm`, approximated:false };
+    }
+  }
+  const num = parseFloat(str);
+  if(isNaN(num) || num<=0) return null;
+  // Area uncertainty compounds (it's effectively width × depth), so we use a
+  // wider relative margin here than for width — our own conservative call,
+  // not from any external standard.
+  const margin = Math.max(5, +(num*0.25).toFixed(1));
+  const min = +Math.max(1, num-margin).toFixed(1);
+  const max = +(num+margin).toFixed(1);
+  return { min, max, mid:num, display:`~${min}-${max} sqm (approx. — AI gave single estimate ${num} sqm)`, approximated:true };
+}
+
 function computeCrowdFlow(q){
   if(!q || !q.road_width_meters) return null;
   // Use the normalized width band. For the SAFE capacity calc we still use
@@ -1244,10 +1270,17 @@ async function callGroq(b64){
   // (statues, poles, kiosks, etc. standing on the walking surface). The
   // crowd-flow capacity formula should use this NET figure, not gross,
   // since pilgrims can't physically occupy the space a statue/pillar takes up.
+  //
+  // area_estimate_sqm is now normalized the same way as road_width_meters —
+  // AI range string used as-is, bare AI number widened into an approximate
+  // band client-side — so a single fixed sqm figure is never trusted outright.
   const fixedObstacles = Array.isArray(quant.fixed_obstacles) ? quant.fixed_obstacles : [];
   const obstacleAreaTotal = fixedObstacles.reduce((sum, o) => sum + (Number(o?.area_sqm) || 0), 0);
-  const grossArea = quant.area_estimate_sqm || null;
+  const areaBand = normalizeArea(quant.area_estimate_sqm);
+  const grossArea = areaBand ? areaBand.mid : null;       // midpoint used as the "single" gross figure downstream
   const netArea = grossArea !== null ? Math.max(0, +(grossArea - obstacleAreaTotal).toFixed(1)) : null;
+  const netAreaMin = areaBand ? Math.max(0, +(areaBand.min - obstacleAreaTotal).toFixed(1)) : null;
+  const netAreaMax = areaBand ? Math.max(0, +(areaBand.max - obstacleAreaTotal).toFixed(1)) : null;
 
   const predictedRisks = Array.isArray(quant.predicted_risks) ? quant.predicted_risks : [];
 
@@ -1258,10 +1291,14 @@ async function callGroq(b64){
     inspector_note:raw.inspector_note||'',
     quantification: {
       road_width_meters: quant.road_width_meters || null,  // can be string range "8-10" or number
-      area_estimate_sqm: grossArea,
+      area_estimate_sqm: grossArea,          // midpoint — numeric, kept for backward-compat calcs/displays
+      area_estimate_raw: quant.area_estimate_sqm || null,  // raw AI value (range string or number) — use normalizeArea() on this for display
       fixed_obstacles: fixedObstacles,
       obstacle_area_sqm: +obstacleAreaTotal.toFixed(1),
       net_area_sqm: netArea,
+      net_area_min: netAreaMin,
+      net_area_max: netAreaMax,
+      area_approximated: areaBand ? areaBand.approximated : false,
       predicted_risks: predictedRisks,
       intersection_type: quant.intersection_type || 'not visible',
       pedestrian_count: quant.pedestrian_count ?? 0,
@@ -1747,13 +1784,18 @@ function showPopup(item){
     const wBandForDisplay = normalizeRoadWidth(q.road_width_meters);
     const widthDisplay = wBandForDisplay ? wBandForDisplay.display : '—';
     document.getElementById('quantWidth').textContent = widthDisplay;
-    document.getElementById('quantArea').textContent = q.area_estimate_sqm ? q.area_estimate_sqm + ' sqm' : '—';
-    // Net area — show if obstacles found
+    // Area — same treatment as width: show the approximate band, not a bare
+    // fixed sqm figure. area_estimate_raw carries the original AI value.
+    const aBandForDisplay = normalizeArea(q.area_estimate_raw ?? q.area_estimate_sqm);
+    document.getElementById('quantArea').textContent = aBandForDisplay ? aBandForDisplay.display : '—';
+    // Net area — show if obstacles found, as a range when we have one
     const netAreaEl = document.getElementById('quantNetArea');
-    if(q.net_area_sqm !== null && q.net_area_sqm !== undefined && q.obstacle_area_sqm > 0){
-      netAreaEl.innerHTML = `<span style="color:var(--amber);">Net: ${q.net_area_sqm} sqm</span> <span style="color:var(--text3);">(−${q.obstacle_area_sqm} fixed obstacles)</span>`;
-    } else if(q.net_area_sqm !== null && q.net_area_sqm !== undefined){
-      netAreaEl.innerHTML = `<span style="color:var(--green);font-size:0.55rem;">Net = Gross (no fixed obstacles)</span>`;
+    const hasNetRange = q.net_area_min !== null && q.net_area_min !== undefined && q.net_area_max !== null && q.net_area_max !== undefined && q.net_area_min !== q.net_area_max;
+    const netDisplay = hasNetRange ? `${q.net_area_min}-${q.net_area_max} sqm` : (q.net_area_sqm!==null && q.net_area_sqm!==undefined ? `${q.net_area_sqm} sqm` : null);
+    if(netDisplay && q.obstacle_area_sqm > 0){
+      netAreaEl.innerHTML = `<span style="color:var(--amber);">Net: ${netDisplay}</span> <span style="color:var(--text3);">(−${q.obstacle_area_sqm} fixed obstacles)</span>`;
+    } else if(netDisplay){
+      netAreaEl.innerHTML = `<span style="color:var(--green);font-size:0.55rem;">Net = Gross (no fixed obstacles) · ${netDisplay}</span>`;
     } else { netAreaEl.textContent = ''; }
 
     // Predicted Risks (Part 2 — What-If)
@@ -3050,7 +3092,7 @@ function exportPDF(){
     const quantHTML = q ? `
       <div class="quant-row">
         <span class="qt"><b>Road Width:</b> ${(normalizeRoadWidth(q.road_width_meters)||{}).display || '—'}</span>
-        <span class="qt"><b>Area Est.:</b> ${q.area_estimate_sqm?q.area_estimate_sqm+' sqm':'—'}</span>
+        <span class="qt"><b>Area Est.:</b> ${(normalizeArea(q.area_estimate_raw ?? q.area_estimate_sqm)||{}).display || '—'}</span>
         <span class="qt"><b>Pedestrians:</b> ${q.pedestrian_count??'—'}</span>
         <span class="qt"><b>Vehicles:</b> ${q.vehicle_count??0}</span>
         <span class="qt"><b>Potholes:</b> ${q.pothole_count??0}</span>
