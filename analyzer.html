@@ -538,6 +538,7 @@
           <div class="sum-kpi"><div class="sv" id="sumSafe" style="color:var(--green)">0</div><div class="sl">Low Risk</div></div>
         </div>
         <div class="sum-top-risk" id="sumTopRisk"></div>
+        <div id="priorityList" style="margin-top:10px;"></div>
       </div>
       <div id="sumEmpty" style="font-size:0.65rem;color:var(--text3);padding:6px 0;">Summary appears after audit</div>
     </div>
@@ -834,6 +835,7 @@
       <div class="scene-text" id="sceneText"></div>
     </div>
     <div class="findings-wrap">
+      <div id="beforeAfterBanner" style="display:none;"></div>
       <div class="findings-header" id="findingsHeader">FIELD AUDIT FINDINGS</div>
       <div id="findingsContent"></div>
     </div>
@@ -1422,6 +1424,49 @@ function addToQueue({imgData,lat,lng,accuracy,filename,timestamp,gpsFromExif}){
 // purely for map DISPLAY — item.lat/item.lng (the true, reported coordinates
 // used everywhere else: popup, CSV, PDF report) are never touched.
 let clusterRings = [];
+// ── BEFORE/AFTER VERIFICATION — auto-detect a re-audit of the same spot ──────
+// Re-uses the same 6-metre "same real-world point" threshold as the marker
+// fan-out logic. If an earlier audited photo exists at (near) this exact
+// point, show a risk comparison — a simple, transparent way to confirm
+// whether a fix actually worked, with zero extra data entry required.
+function findPreviousAuditAtSameSpot(item){
+  if(!item || item.status!=='done') return null;
+  let best = null;
+  queue.forEach(other=>{
+    if(other.id===item.id || other.status!=='done' || !other.aiData) return;
+    const dLatM = (item.lat - other.lat) * 111000;
+    const dLngM = (item.lng - other.lng) * 111000 * Math.cos(item.lat*Math.PI/180);
+    if(Math.sqrt(dLatM*dLatM + dLngM*dLngM) < 6){
+      if(new Date(other.timestamp) < new Date(item.timestamp)){
+        if(!best || new Date(other.timestamp) > new Date(best.timestamp)) best = other; // most recent prior audit
+      }
+    }
+  });
+  return best;
+}
+function renderBeforeAfterBanner(item){
+  const el = document.getElementById('beforeAfterBanner');
+  if(!el) return;
+  const prev = findPreviousAuditAtSameSpot(item);
+  if(!prev || !item.aiData){ el.style.display='none'; return; }
+  const rBefore = prev.aiData.overall_risk, rAfter = item.aiData.overall_risk;
+  const cBefore = riskColor(rBefore), cAfter = riskColor(rAfter);
+  const improved = (RISK_RANK[rAfter]||0) < (RISK_RANK[rBefore]||0);
+  const worsened = (RISK_RANK[rAfter]||0) > (RISK_RANK[rBefore]||0);
+  const verdict = improved ? '✅ Improved' : worsened ? '⚠️ Got worse' : '➖ No change';
+  const vColor = improved ? 'var(--green)' : worsened ? 'var(--red)' : 'var(--text3)';
+  el.style.display = '';
+  el.innerHTML = `<div style="margin:0 0 12px;padding:10px 12px;background:var(--panel2);border:1px solid var(--border2);border-radius:10px;">
+    <div style="font-size:0.6rem;color:var(--text3);font-weight:600;margin-bottom:6px;">🔁 RE-AUDIT DETECTED — same location as Photo #${prev.id} (${new Date(prev.timestamp).toLocaleDateString()})</div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span style="font-size:0.7rem;font-weight:700;color:${cBefore};">${rBefore}</span>
+      <span style="color:var(--text3);">→</span>
+      <span style="font-size:0.7rem;font-weight:700;color:${cAfter};">${rAfter}</span>
+      <span style="margin-left:auto;font-size:0.62rem;font-weight:700;color:${vColor};">${verdict}</span>
+    </div>
+    <button onclick="showPopup(queue.find(q=>q.id===${prev.id}))" style="margin-top:8px;width:100%;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--panel);color:var(--text2);font-size:0.6rem;cursor:pointer;">View previous audit (Photo #${prev.id})</button>
+  </div>`;
+}
 function recomputeMarkerOffsets(){
   clusterRings.forEach(c=>map.removeLayer(c));
   clusterRings = [];
@@ -1505,6 +1550,15 @@ function applyManualGps(item, lat, lng, source){
   renderFeed(); updateHeatmap();
   if(currentPopupItem && currentPopupItem.id === item.id) showPopup(item);
 }
+function toggleFindingResolved(itemId, findingId, checked){
+  const item = queue.find(q=>q.id===itemId);
+  if(!item) return;
+  if(!item.resolvedFindings) item.resolvedFindings = [];
+  if(checked){ if(!item.resolvedFindings.includes(findingId)) item.resolvedFindings.push(findingId); }
+  else { item.resolvedFindings = item.resolvedFindings.filter(id=>id!==findingId); }
+  if(currentPopupItem?.id===itemId) showPopup(item); // refresh checkbox label state
+  updateSummary(); // refresh "X addressed" count in priority list
+}
 function gpsSourceLabel(item){
   switch(item.gpsSource){
     case 'exif': return 'EXIF (from photo)';
@@ -1556,6 +1610,40 @@ function updateSummary(){
   const top=Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
   document.getElementById('sumTopRisk').innerHTML=top?`Most common: <span>${top[0]} (${top[1]} locations)</span>`:'';
   document.getElementById('summaryCard').classList.add('show');document.getElementById('sumEmpty').style.display='none';
+  renderPriorityList(done);
+}
+
+// ── PRIORITY RANKING — "which spots need attention first" ──────────────────
+// Ranks audited locations by risk severity, then by how many distinct hazards
+// were flagged, so the most urgent, most evidenced locations surface first.
+const RISK_RANK = {CRITICAL:4, HIGH:3, MEDIUM:2, LOW:1, CLEAR:0};
+function renderPriorityList(done){
+  const el = document.getElementById('priorityList');
+  if(!el) return;
+  const ranked = [...done]
+    .filter(p => (RISK_RANK[p.aiData.overall_risk]||0) >= 2) // MEDIUM and above only
+    .sort((a,b)=>{
+      const r = (RISK_RANK[b.aiData.overall_risk]||0) - (RISK_RANK[a.aiData.overall_risk]||0);
+      if(r!==0) return r;
+      const ha = a.aiData.findings?.filter(f=>f.severity!=='NONE').length||0;
+      const hb = b.aiData.findings?.filter(f=>f.severity!=='NONE').length||0;
+      return hb-ha;
+    })
+    .slice(0,10);
+  if(!ranked.length){ el.innerHTML = `<div style="font-size:0.62rem;color:var(--green);margin-top:4px;">✓ No urgent (MEDIUM+) locations right now.</div>`; return; }
+  el.innerHTML = `<div style="font-size:0.6rem;color:var(--text3);font-weight:600;margin-bottom:6px;">🎯 TOP ${ranked.length} MOST URGENT LOCATIONS</div>` +
+    ranked.map((p,i)=>{
+      const c = riskColor(p.aiData.overall_risk);
+      const hCount = p.aiData.findings?.filter(f=>f.severity!=='NONE').length||0;
+      const done_ct = (p.resolvedFindings||[]).length;
+      const doneTag = done_ct>0 ? ` <span style="color:var(--green);">· ${done_ct} addressed</span>` : '';
+      return `<div onclick="showPopup(queue.find(q=>q.id===${p.id}))" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;background:var(--panel);margin-bottom:4px;cursor:pointer;">
+        <span style="font-size:0.6rem;color:var(--text3);width:14px;">#${i+1}</span>
+        <span style="width:8px;height:8px;border-radius:50%;background:${c};flex-shrink:0;"></span>
+        <span style="font-size:0.62rem;color:var(--text2);flex:1;">Photo #${p.id} — ${hCount} hazard${hCount!==1?'s':''}${doneTag}</span>
+        <span style="font-size:0.56rem;font-weight:700;color:${c};">${p.aiData.overall_risk}</span>
+      </div>`;
+    }).join('');
 }
 
 // ── ANALYZE ──────────────────────────────────────────────────
@@ -1785,6 +1873,8 @@ function showPopup(item){
 
   // Event Scenario tab availability — disable when AI audit failed or hasn't run
   updateScenarioTabAvailability(item);
+
+  renderBeforeAfterBanner(item);
 
   // PHOTO ANNOTATION — show hazard + where in photo
   const tagsEl=document.getElementById('popPhotoTags');
@@ -2051,8 +2141,8 @@ function showPopup(item){
     fh.textContent=`FIELD AUDIT FINDINGS — ${hazards.length} hazard${hazards.length!==1?'s':''} detected`;
     let html='';
     if(transparencyMode==='public'){
-      if(hazards.length){html+=`<div style="font-family:'JetBrains Mono',monospace;font-size:0.57rem;color:var(--text3);letter-spacing:0.1em;margin-bottom:8px;">⚠ THINGS TO WATCH OUT FOR</div>`;html+=hazards.map(f=>findingCard(f,false,'public')).join('');}
-      if(positives.length){html+=`<div style="font-family:'JetBrains Mono',monospace;font-size:0.57rem;color:var(--green);letter-spacing:0.1em;margin:10px 0 8px;">✓ GOOD TO KNOW</div>`;html+=positives.map(f=>findingCard(f,true,'public')).join('');}
+      if(hazards.length){html+=`<div style="font-family:'JetBrains Mono',monospace;font-size:0.57rem;color:var(--text3);letter-spacing:0.1em;margin-bottom:8px;">⚠ THINGS TO WATCH OUT FOR</div>`;html+=hazards.map(f=>findingCard(f,false,'public',item.id)).join('');}
+      if(positives.length){html+=`<div style="font-family:'JetBrains Mono',monospace;font-size:0.57rem;color:var(--green);letter-spacing:0.1em;margin:10px 0 8px;">✓ GOOD TO KNOW</div>`;html+=positives.map(f=>findingCard(f,true,'public',item.id)).join('');}
       if(!hazards.length){html+=`<div style="color:var(--green);text-align:center;padding:14px;font-size:0.75rem;">✓ This location looks safe — no issues found for pilgrims here.</div>`;}
     } else {
       if(hazards.length){html+=`<div style="font-family:'JetBrains Mono',monospace;font-size:0.57rem;color:var(--text3);letter-spacing:0.1em;margin-bottom:6px;">⚠ HAZARDS DETECTED</div>`;html+=hazards.map(f=>findingCard(f)).join('');}
@@ -2078,18 +2168,31 @@ function showPopup(item){
 }
 
 let cardCounter=0;
-function findingCard(f,isPositive=false,mode='inspector'){
+function findingCard(f,isPositive=false,mode='inspector',itemId=null){
   const sev=SEV_CONFIG[f.severity]||SEV_CONFIG.NONE;
   const c = sev.color;
 
   if(mode==='public'){
     const sentence = f.public_summary || f.pilgrim_impact || f.visual_evidence || 'No further detail available.';
     const icon=ICONS[f.id]||'⚠️';
+    // Action tracking — lets a field team mark a specific hazard as fixed
+    // (e.g. barricade installed, drainage cleared), giving a transparent record
+    // of what's been addressed vs still outstanding, without any backend.
+    let actionRow = '';
+    if(!isPositive && itemId){
+      const item = queue.find(q=>q.id===itemId);
+      const resolved = item?.resolvedFindings?.includes(f.id);
+      actionRow = `<label style="display:flex;align-items:center;gap:5px;margin-top:6px;font-size:0.6rem;color:${resolved?'var(--green)':'var(--text3)'};cursor:pointer;">
+        <input type="checkbox" ${resolved?'checked':''} onchange="toggleFindingResolved(${itemId},'${f.id}',this.checked)" style="accent-color:var(--green);">
+        ${resolved?'✓ Marked as addressed':'Mark as addressed'}
+      </label>`;
+    }
     return `<div class="pub-finding" style="border-left:3px solid ${c};background:${c}0a;">
       <span class="pf-icon">${icon}</span>
       <div class="pf-body">
         <div class="pf-name">${f.name}</div>
         <div class="pf-sentence">${sentence}</div>
+        ${actionRow}
       </div>
       <span class="pf-badge" style="background:${c}22;color:${c};border:1px solid ${c}44;">${sev.label}</span>
     </div>`;
