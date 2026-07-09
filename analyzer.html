@@ -539,6 +539,8 @@
         </div>
         <div class="sum-top-risk" id="sumTopRisk"></div>
         <div id="priorityList" style="margin-top:10px;"></div>
+        <button id="btnGenExecSummary" onclick="generateExecutiveSummary()" style="width:100%;margin-top:10px;padding:8px;border-radius:8px;border:1px solid var(--border2);background:var(--panel);color:var(--text2);font-size:0.62rem;font-weight:700;cursor:pointer;">🪄 Generate Executive Summary</button>
+        <div id="execSummaryBox" style="display:none;margin-top:8px;padding:10px;background:var(--panel);border:1px solid var(--border2);border-radius:8px;font-size:0.68rem;color:var(--text2);line-height:1.6;"></div>
       </div>
       <div id="sumEmpty" style="font-size:0.65rem;color:var(--text3);padding:6px 0;">Summary appears after audit</div>
     </div>
@@ -836,6 +838,7 @@
     </div>
     <div class="findings-wrap">
       <div id="beforeAfterBanner" style="display:none;"></div>
+      <div id="auditTrailBox" style="display:none;margin-bottom:12px;padding:10px 12px;background:var(--panel2);border:1px solid var(--border2);border-radius:10px;"></div>
       <div class="findings-header" id="findingsHeader">FIELD AUDIT FINDINGS</div>
       <div id="findingsContent"></div>
     </div>
@@ -1544,8 +1547,20 @@ function pickLocationOnMap(){
   // Make sure the map view is actually visible while picking
   switchView('map');
 }
+// ── AUDIT TRAIL — simple, transparent, timestamped log of every change made ──
+// to a photo's record after the initial AI audit (who fixed what, when).
+// No login/accounts exist, so this doesn't attribute to a person — just an
+// honest record of what changed and when, which is still valuable evidence
+// for a government reviewer asking "how was this maintained?".
+function logAuditEvent(item, text){
+  if(!item.history) item.history = [];
+  item.history.push({ ts: new Date().toISOString(), text });
+}
 function applyManualGps(item, lat, lng, source){
+  const oldLat=item.lat, oldLng=item.lng;
   item.lat = lat; item.lng = lng; item.accuracy = 3; item.gpsFromExif = false; item.gpsSource = source || 'manual';
+  const srcLabel = source==='overlay-ocr' ? 'auto-read from photo overlay' : source==='manual' ? 'manually set' : source||'updated';
+  logAuditEvent(item, `📍 Location ${srcLabel}: ${oldLat.toFixed(5)},${oldLng.toFixed(5)} → ${lat.toFixed(5)},${lng.toFixed(5)}`);
   recomputeMarkerOffsets();
   renderFeed(); updateHeatmap();
   if(currentPopupItem && currentPopupItem.id === item.id) showPopup(item);
@@ -1556,8 +1571,20 @@ function toggleFindingResolved(itemId, findingId, checked){
   if(!item.resolvedFindings) item.resolvedFindings = [];
   if(checked){ if(!item.resolvedFindings.includes(findingId)) item.resolvedFindings.push(findingId); }
   else { item.resolvedFindings = item.resolvedFindings.filter(id=>id!==findingId); }
+  const fname = item.aiData?.findings?.find(f=>f.id===findingId)?.name || findingId;
+  logAuditEvent(item, checked ? `✅ Marked "${fname}" as addressed` : `↩️ Unmarked "${fname}" as addressed`);
   if(currentPopupItem?.id===itemId) showPopup(item); // refresh checkbox label state
   updateSummary(); // refresh "X addressed" count in priority list
+}
+function renderAuditTrail(item){
+  const el = document.getElementById('auditTrailBox');
+  if(!el) return;
+  if(!item.history || !item.history.length){ el.style.display='none'; return; }
+  el.style.display='';
+  el.innerHTML = `<div style="font-size:0.58rem;color:var(--text3);font-weight:600;margin-bottom:6px;">🕒 AUDIT TRAIL</div>` +
+    item.history.slice().reverse().map(h=>`<div style="font-size:0.6rem;color:var(--text2);padding:4px 0;border-top:1px solid var(--border);">
+      <span style="color:var(--text3);">${new Date(h.ts).toLocaleString()}</span> — ${h.text}
+    </div>`).join('');
 }
 function gpsSourceLabel(item){
   switch(item.gpsSource){
@@ -1617,6 +1644,46 @@ function updateSummary(){
 // Ranks audited locations by risk severity, then by how many distinct hazards
 // were flagged, so the most urgent, most evidenced locations surface first.
 const RISK_RANK = {CRITICAL:4, HIGH:3, MEDIUM:2, LOW:1, CLEAR:0};
+// ── AUTO EXECUTIVE SUMMARY — one AI-written paragraph for non-technical review ──
+async function generateExecutiveSummary(){
+  const done = queue.filter(p=>p.status==='done'&&p.aiData);
+  if(!done.length){ alert('No audited photos yet.'); return; }
+  const btn = document.getElementById('btnGenExecSummary');
+  const box = document.getElementById('execSummaryBox');
+  btn.disabled = true; btn.textContent = '⏳ Generating...';
+  try{
+    const hazardCounts = {};
+    done.forEach(p=>p.aiData.findings?.filter(f=>HAZARD_IDS.includes(f.id)&&f.severity!=='NONE').forEach(f=>{hazardCounts[f.name]=(hazardCounts[f.name]||0)+1;}));
+    const topHazards = Object.entries(hazardCounts).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([name,count])=>({name,count}));
+    const topLocations = [...done].filter(p=>(RISK_RANK[p.aiData.overall_risk]||0)>=2)
+      .sort((a,b)=>(RISK_RANK[b.aiData.overall_risk]||0)-(RISK_RANK[a.aiData.overall_risk]||0))
+      .slice(0,5)
+      .map(p=>{
+        const hs = p.aiData.findings?.filter(f=>f.severity!=='NONE')||[];
+        return { id:p.id, risk:p.aiData.overall_risk, hazardCount:hs.length, topHazardName: hs[0]?.name||'general risk' };
+      });
+    const resolvedCount = done.reduce((s,p)=>s+(p.resolvedFindings?.length||0),0);
+    const stats = {
+      total: done.length,
+      critical: done.filter(p=>p.aiData.overall_risk==='CRITICAL').length,
+      high: done.filter(p=>p.aiData.overall_risk==='HIGH').length,
+      medium: done.filter(p=>p.aiData.overall_risk==='MEDIUM').length,
+      low: done.filter(p=>['LOW','CLEAR'].includes(p.aiData.overall_risk)).length,
+      topHazards, topLocations, resolvedCount
+    };
+    const res = await fetch('/.netlify/functions/executive-summary', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(stats) });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error||'Failed to generate summary');
+    box.style.display = '';
+    box.innerHTML = `${data.summary}<div style="margin-top:8px;display:flex;gap:6px;">
+      <button onclick="navigator.clipboard.writeText(this.parentElement.parentElement.firstChild.textContent).then(()=>{this.textContent='✓ Copied'})" style="flex:1;padding:5px;border-radius:6px;border:1px solid var(--border2);background:var(--panel2);color:var(--text2);font-size:0.58rem;cursor:pointer;">📋 Copy</button>
+    </div>`;
+  }catch(e){
+    alert('Could not generate summary: '+e.message);
+  }
+  btn.disabled = false; btn.textContent = '🪄 Generate Executive Summary';
+}
+
 function renderPriorityList(done){
   const el = document.getElementById('priorityList');
   if(!el) return;
@@ -1875,6 +1942,7 @@ function showPopup(item){
   updateScenarioTabAvailability(item);
 
   renderBeforeAfterBanner(item);
+  renderAuditTrail(item);
 
   // PHOTO ANNOTATION — show hazard + where in photo
   const tagsEl=document.getElementById('popPhotoTags');
@@ -2187,11 +2255,14 @@ function findingCard(f,isPositive=false,mode='inspector',itemId=null){
         ${resolved?'✓ Marked as addressed':'Mark as addressed'}
       </label>`;
     }
+    const confPct = typeof f.confidence==='number' ? Math.round(f.confidence<=1?f.confidence*100:f.confidence) : null;
+    const confRow = confPct!==null ? `<div style="font-size:0.55rem;color:var(--text3);margin-top:4px;">AI confidence: <span style="color:${confPct>=80?'var(--green)':confPct>=60?'var(--amber)':'var(--red)'};font-weight:600;">${confPct}%</span></div>` : '';
     return `<div class="pub-finding" style="border-left:3px solid ${c};background:${c}0a;">
       <span class="pf-icon">${icon}</span>
       <div class="pf-body">
         <div class="pf-name">${f.name}</div>
         <div class="pf-sentence">${sentence}</div>
+        ${confRow}
         ${actionRow}
       </div>
       <span class="pf-badge" style="background:${c}22;color:${c};border:1px solid ${c}44;">${sev.label}</span>
